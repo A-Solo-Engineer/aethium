@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/A-Solo-Engineer/aethium/canvas"
@@ -104,10 +103,6 @@ func (r *Runtime) Attach(root Component) error {
 }
 
 func (r *Runtime) Tick() error {
-	if r == nil {
-		return errors.New("runtime is nil")
-	}
-
 	r.frameMu.Lock()
 	r.frame++
 	r.frameMu.Unlock()
@@ -123,24 +118,18 @@ func (r *Runtime) Tick() error {
 	defer dl.Release()
 
 	if err := r.buildFrame(r.root, dl, 0); err != nil {
-		return fmt.Errorf("buildFrame failed: %w", err)
+		return err
 	}
 
 	// Render
 	if r.backend != nil {
-		if err := r.backend.Render(dl); err != nil {
-			return fmt.Errorf("backend.Render failed: %w", err)
-		}
+		return r.backend.Render(dl)
 	}
 
 	return nil
 }
 
 func (r *Runtime) buildFrame(node *scene.VNode, dl *canvas.DrawList, index int) error {
-	if node == nil {
-		return errors.New("node is nil")
-	}
-
 	r.depMu.Lock()
 	r.currentNode = node
 	r.clearNodeDependencies(node)
@@ -154,10 +143,9 @@ func (r *Runtime) buildFrame(node *scene.VNode, dl *canvas.DrawList, index int) 
 			ctx := UpdateContext{
 				Index: index,
 				Node:  node,
-				Dirty: r.getNodeDirtySignals(node),
 			}
 			if err := comp.Update(ctx); err != nil {
-				return fmt.Errorf("component.Update failed: %w", err)
+				return err
 			}
 		}
 		node.Dirty = false
@@ -176,7 +164,7 @@ func (r *Runtime) buildFrame(node *scene.VNode, dl *canvas.DrawList, index int) 
 	// Recursively build children
 	for i, child := range node.Children {
 		if err := r.buildFrame(child, dl, index+i); err != nil {
-			return fmt.Errorf("buildFrame child failed: %w", err)
+			return err
 		}
 	}
 
@@ -289,18 +277,3 @@ func (r *Runtime) GetRoot() *scene.VNode {
 func (r *Runtime) SetBackend(backend platform.Backend) {
 	r.backend = backend
 }
-
-func (r *Runtime) getNodeDirtySignals(node *scene.VNode) []reactive.SignalID {
-	r.depMu.Lock()
-	defer r.depMu.Unlock()
-
-	if signals, ok := r.nodeSignals[node.ID]; ok {
-		dirtySignals := make([]reactive.SignalID, 0, len(signals))
-		for signalID := range signals {
-			dirtySignals = append(dirtySignals, signalID)
-		}
-		return dirtySignals
-	}
-	return nil
-}
-
