@@ -21,26 +21,26 @@ func (b *Backend) Render(dl *canvas.DrawList) error {
 		return nil
 	}
 
-	// Convert DrawCmds to JS-friendly format
+	// Convert DrawCmds to JS-friendly format (flat array for performance)
 	cmds := make([]any, len(dl.Cmds))
 	for i, cmd := range dl.Cmds {
-		cmdMap := map[string]any{
-			"Kind":  uint8(cmd.Kind),
-			"X":     cmd.X,
-			"Y":     cmd.Y,
-			"W":     cmd.W,
-			"H":     cmd.H,
-			"Color": uint32(cmd.Color),
-			"Text":  cmd.Text,
+		cmdData := []any{
+			uint8(cmd.Kind),
+			cmd.X,
+			cmd.Y,
+			cmd.W,
+			cmd.H,
+			uint32(cmd.Color),
+			cmd.Text,
 		}
 		if cmd.Kind == canvas.CmdTransform {
 			transform := make([]any, 6)
 			for j, v := range cmd.Transform {
 				transform[j] = v
 			}
-			cmdMap["Transform"] = transform
+			cmdData = append(cmdData, transform)
 		}
-		cmds[i] = cmdMap
+		cmds[i] = cmdData
 	}
 
 	js.Global().Get("Aethium").Call("renderFrame", cmds)

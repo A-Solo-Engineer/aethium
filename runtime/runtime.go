@@ -240,14 +240,16 @@ func (r *Runtime) handleSignalChange(id reactive.SignalID) {
 	r.ScheduleOnUI(func() {
 		r.depMu.Lock()
 		nodes, ok := r.signalNodes[id]
-		r.depMu.Unlock()
 		if !ok {
+			r.depMu.Unlock()
 			return
 		}
 
+		// Mark nodes dirty while holding the lock to avoid races with Track
 		for _, node := range nodes {
 			node.MarkDirty(id)
 		}
+		r.depMu.Unlock()
 	})
 }
 

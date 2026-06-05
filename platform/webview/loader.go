@@ -27,13 +27,18 @@ func NewLoader(backend platform.Backend) *Loader {
 
 func (l *Loader) Run() error {
 	// Serve assets
-	http.HandleFunc("/", l.serveIndex)
-	http.HandleFunc("/app.wasm", l.serveWasm)
-	http.HandleFunc("/aethium.js", l.serveJS)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", l.serveIndex)
+	mux.HandleFunc("/app.wasm", l.serveWasm)
+	mux.HandleFunc("/aethium.js", l.serveJS)
 
 	// Start server
 	fmt.Printf("Serving Aethium app at http://%s\n", l.addr)
-	return http.ListenAndServe(l.addr, nil)
+	server := &http.Server{
+		Addr:    l.addr,
+		Handler: mux,
+	}
+	return server.ListenAndServe()
 }
 
 func (l *Loader) serveIndex(w http.ResponseWriter, r *http.Request) {

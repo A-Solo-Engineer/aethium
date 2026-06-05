@@ -58,3 +58,29 @@ func TestVNode_FindNode(t *testing.T) {
 		t.Error("failed to find child node by ID")
 	}
 }
+
+func TestVNode_PoolReset(t *testing.T) {
+	node := NewVNode("comp")
+	node.MarkDirty(123)
+	node.AddSignal(456)
+	
+	id := node.ID
+	ReleaseVNode(node)
+	
+	// Get new node from pool (might be the same one)
+	newNode := NewVNode("newcomp")
+	
+	if newNode.IsDirty() {
+		t.Error("newly pooled node should not be dirty")
+	}
+	if len(newNode.DirtySignals) != 0 {
+		t.Errorf("newly pooled node should have 0 dirty signals, got %v", newNode.DirtySignals)
+	}
+	if len(newNode.Signals) != 0 {
+		t.Errorf("newly pooled node should have 0 signals, got %v", newNode.Signals)
+	}
+	if newNode.ID == id {
+		// If it's the same node, it should have a new ID
+		t.Error("newly pooled node should have a new ID")
+	}
+}

@@ -83,6 +83,7 @@ func (n *VNode) Reset() {
 	n.Children = n.Children[:0]
 	n.Signals = n.Signals[:0]
 	n.Dirty = false
+	n.DirtySignals = n.DirtySignals[:0]
 	n.Parent = nil
 }
 

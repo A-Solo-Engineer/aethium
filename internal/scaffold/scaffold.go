@@ -47,7 +47,7 @@ require github.com/A-Solo-Engineer/aethium v0.0.0
 	// Create main.go
 	mainGo := `package main
 
-import "github.com/A-Solo-Engineer/aethium/examples/hello/app"
+import "{{.Module}}/app"
 
 func main() {
 	app.Run()
@@ -99,12 +99,14 @@ func (c *Counter) View() []canvas.DrawCmd {
 import (
 	"fmt"
 
+	"github.com/A-Solo-Engineer/aethium/platform"
 	"github.com/A-Solo-Engineer/aethium/runtime"
 )
 
 func Run() {
 	fmt.Println("Aethium app starting...")
-	rt := runtime.NewRuntime(nil)
+	backend := platform.NewDesktopBackend(800, 600)
+	rt := runtime.NewRuntime(backend)
 	counter := NewCounter()
 	if err := rt.Attach(counter); err != nil {
 		fmt.Printf("attach error: %v\n", err)
@@ -161,4 +163,3 @@ func writeTemplate(path, tmpl string, cfg ScaffoldConfig) error {
 
 	return nil
 }
-

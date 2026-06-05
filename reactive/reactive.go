@@ -174,6 +174,24 @@ func UnsubscribeAll(id SubscriberID) {
 	}
 }
 
+func SubscribeSignal(sid SignalID, cb func(SignalID)) (SubscriberID, func()) {
+	signalSubscriberMu.Lock()
+	subSeq++
+	id := subSeq
+	if signalSubscribers == nil {
+		signalSubscribers = map[SignalID]map[SubscriberID]func(SignalID){}
+	}
+	if signalSubscribers[sid] == nil {
+		signalSubscribers[sid] = map[SubscriberID]func(SignalID){}
+	}
+	signalSubscribers[sid][id] = cb
+	signalSubscriberMu.Unlock()
+
+	return id, func() {
+		UnsubscribeAll(id)
+	}
+}
+
 func Notify(id SignalID) {
 	subscriberMu.Lock()
 	subs := make([]func(), 0, len(subscribers))
@@ -184,7 +202,14 @@ func Notify(id SignalID) {
 
 	signalSubscriberMu.Lock()
 	signalSubs := make([]func(SignalID), 0)
-	for _, listeners := range signalSubscribers {
+	// Notify specific signal listeners
+	if listeners, ok := signalSubscribers[id]; ok {
+		for _, cb := range listeners {
+			signalSubs = append(signalSubs, cb)
+		}
+	}
+	// Notify "all" listeners (ID 0)
+	if listeners, ok := signalSubscribers[0]; ok {
 		for _, cb := range listeners {
 			signalSubs = append(signalSubs, cb)
 		}
@@ -211,17 +236,21 @@ func NewComputed[T comparable](deps func() []SignalID, compute func() T) *Comput
 		dirty:   false,
 	}
 
-	// Subscribe to all signal changes and invalidate when a dependency changes.
-	_, unsubscribe := SubscribeAll(func(sid SignalID) {
-		for _, d := range c.deps() {
-			if d == sid {
-				c.Invalidate()
-				Notify(c.id)
-				return
-			}
+	// Subscribe to each dependency individually for better efficiency.
+	unsubscribes := make([]func(), 0)
+	for _, d := range c.deps() {
+		_, unsub := SubscribeSignal(d, func(sid SignalID) {
+			c.Invalidate()
+			Notify(c.id)
+		})
+		unsubscribes = append(unsubscribes, unsub)
+	}
+
+	c.unsubscribe = func() {
+		for _, unsub := range unsubscribes {
+			unsub()
 		}
-	})
-	c.unsubscribe = unsubscribe
+	}
 
 	return c
 }

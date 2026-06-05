@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"time"
 )
 
@@ -35,16 +36,15 @@ func (s *Server) Start() error {
 	go func() {
 		fmt.Println("Starting initial build...")
 		// Use 'go build' instead of 'go run' to generate app.wasm if target is wasm
-		var cmd *exec.Cmd
 		if s.Target == "wasm" {
-			cmd = exec.Command("tinygo", "build", "-o", "app.wasm", "-target=wasm", ".")
+			s.BuildCmd = exec.Command("tinygo", "build", "-o", "app.wasm", "-target=wasm", ".")
 		} else {
-			cmd = exec.Command("go", "build", "-o", "aethium-app", ".")
+			s.BuildCmd = exec.Command("go", "build", "-o", "aethium-app", ".")
 		}
-		cmd.Dir = s.BuildPath
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
+		s.BuildCmd.Dir = s.BuildPath
+		s.BuildCmd.Stdout = os.Stdout
+		s.BuildCmd.Stderr = os.Stderr
+		if err := s.BuildCmd.Run(); err != nil {
 			fmt.Printf("Initial build failed: %v\n", err)
 		} else {
 			fmt.Println("Initial build complete")
@@ -121,7 +121,7 @@ func (s *Server) serveJS(w http.ResponseWriter, r *http.Request) {
 
 func openBrowser(url string) {
 	var cmd *exec.Cmd
-	switch os.Getenv("GOOS") {
+	switch runtime.GOOS {
 	case "windows":
 		cmd = exec.Command("cmd", "/c", "start", url)
 	case "darwin":
