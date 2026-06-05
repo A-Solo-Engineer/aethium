@@ -130,6 +130,9 @@ func (r *Runtime) Tick() error {
 }
 
 func (r *Runtime) buildFrame(node *scene.VNode, dl *canvas.DrawList, index int) error {
+	if node == nil {
+		return nil
+	}
 	r.depMu.Lock()
 	r.currentNode = node
 	r.clearNodeDependencies(node)
@@ -142,6 +145,7 @@ func (r *Runtime) buildFrame(node *scene.VNode, dl *canvas.DrawList, index int) 
 		if comp, ok := node.Component.(Component); ok {
 			ctx := UpdateContext{
 				Index: index,
+				Dirty: node.DirtySignals,
 				Node:  node,
 			}
 			if err := comp.Update(ctx); err != nil {
@@ -149,6 +153,7 @@ func (r *Runtime) buildFrame(node *scene.VNode, dl *canvas.DrawList, index int) 
 			}
 		}
 		node.Dirty = false
+		node.DirtySignals = node.DirtySignals[:0]
 	}
 
 	// Render this node
@@ -241,7 +246,7 @@ func (r *Runtime) handleSignalChange(id reactive.SignalID) {
 		}
 
 		for _, node := range nodes {
-			node.MarkDirty()
+			node.MarkDirty(id)
 		}
 	})
 }

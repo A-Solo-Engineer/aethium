@@ -6,7 +6,6 @@ import (
 	"syscall/js"
 
 	"github.com/A-Solo-Engineer/aethium/canvas"
-	"github.com/A-Solo-Engineer/aethium/platform"
 )
 
 type Backend struct {
@@ -18,25 +17,53 @@ func NewBackend(canvasID string) *Backend {
 }
 
 func (b *Backend) Render(dl *canvas.DrawList) error {
-	// Browser rendering is implemented in the JS host bridge.
-	// This is a placeholder for the Go-to-JS bridge.
+	if dl == nil {
+		return nil
+	}
+
+	// Convert DrawCmds to JS-friendly format
+	cmds := make([]any, len(dl.Cmds))
+	for i, cmd := range dl.Cmds {
+		cmdMap := map[string]any{
+			"Kind":  uint8(cmd.Kind),
+			"X":     cmd.X,
+			"Y":     cmd.Y,
+			"W":     cmd.W,
+			"H":     cmd.H,
+			"Color": uint32(cmd.Color),
+			"Text":  cmd.Text,
+		}
+		if cmd.Kind == canvas.CmdTransform {
+			transform := make([]any, 6)
+			for j, v := range cmd.Transform {
+				transform[j] = v
+			}
+			cmdMap["Transform"] = transform
+		}
+		cmds[i] = cmdMap
+	}
+
+	js.Global().Get("Aethium").Call("renderFrame", cmds)
 	return nil
 }
 
-func RegisterBackend(backend platform.Backend) {
-	// Entry point for runtime registration.
-	// The JS host bridge will call this during initialization.
+var globalBackend *Backend
+
+func RegisterBackend(backend *Backend) {
+	globalBackend = backend
 }
 
 // Exported functions for JS host bridge
 func InitRuntime(canvasID string) {
-	// Initialize the runtime with the canvas element ID
-	// This will be called from the generated aethium.js
+	backend := NewBackend(canvasID)
+	RegisterBackend(backend)
+	js.Global().Get("Aethium").Call("initRuntime", canvasID)
 }
 
 func RenderFrame(dl *canvas.DrawList) {
-	// Called from JS to render a frame
-	// The actual rendering happens in the JS host bridge
+	if globalBackend != nil {
+		globalBackend.Render(dl)
+	}
 }
 
 func ScheduleOnUI(fn func()) {

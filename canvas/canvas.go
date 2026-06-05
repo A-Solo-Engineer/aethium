@@ -55,6 +55,13 @@ func (dl *DrawList) Append(cmd DrawCmd) {
 	dl.Cmds = append(dl.Cmds, cmd)
 }
 
+func (dl *DrawList) AppendSlice(cmds []DrawCmd) {
+	if dl == nil || len(cmds) == 0 {
+		return
+	}
+	dl.Cmds = append(dl.Cmds, cmds...)
+}
+
 func Merge(dst, src *DrawList) {
 	if dst == nil || src == nil {
 		return

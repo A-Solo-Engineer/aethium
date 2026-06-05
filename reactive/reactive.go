@@ -29,12 +29,13 @@ type Signal[T comparable] struct {
 }
 
 type Computed[T comparable] struct {
-    id      SignalID
-    deps    func() []SignalID
-    compute func() T
-    cached  T
-    mu      sync.RWMutex
-    dirty   bool
+    id          SignalID
+    deps        func() []SignalID
+    compute     func() T
+    cached      T
+    mu          sync.RWMutex
+    dirty       bool
+    unsubscribe func()
 }
 
 type Effect struct {
@@ -210,20 +211,24 @@ func NewComputed[T comparable](deps func() []SignalID, compute func() T) *Comput
     }
 
     // Subscribe to all signal changes and invalidate when a dependency changes.
-    // This uses SubscribeAll to observe signal notifications and then checks
-    // whether the changed signal is one of this computed's dependencies.
-    _, _ = SubscribeAll(func(sid SignalID) {
+    _, unsubscribe := SubscribeAll(func(sid SignalID) {
         for _, d := range c.deps() {
             if d == sid {
                 c.Invalidate()
-                // Notify dependents of this computed that it became stale.
                 Notify(c.id)
                 return
             }
         }
     })
+    c.unsubscribe = unsubscribe
 
     return c
+}
+
+func (c *Computed[T]) Dispose() {
+    if c.unsubscribe != nil {
+        c.unsubscribe()
+    }
 }
 
 func (c *Computed[T]) Get() T {

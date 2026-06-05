@@ -83,13 +83,10 @@ func (c *Counter) Unmount(ctx runtime.UnmountContext) error { return nil }
 
 func (c *Counter) View() []canvas.DrawCmd {
 	count := c.count.Get()
-	dl := canvas.NewDrawList()
-	defer dl.Release()
-	canvas.FillRect(dl, canvas.Rect{X: 10, Y: 10, W: 100, H: 50}, 0xFF0000FF)
-	canvas.DrawText(dl, 120, 35, fmt.Sprintf("Count: %d", count), 0xFFFFFFFF)
-	cmds := make([]canvas.DrawCmd, len(dl.Cmds))
-	copy(cmds, dl.Cmds)
-	return cmds
+	return []canvas.DrawCmd{
+		{Kind: canvas.CmdFillRect, X: 10, Y: 10, W: 100, H: 50, Color: 0xFF0000FF},
+		{Kind: canvas.CmdDrawText, X: 120, Y: 35, Text: fmt.Sprintf("Count: %d", count), Color: 0xFFFFFFFF},
+	}
 }
 `
 	if err := writeTemplate(filepath.Join(cfg.Dir, "app", "view.go"), viewGo, cfg); err != nil {

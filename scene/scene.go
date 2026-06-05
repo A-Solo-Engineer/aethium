@@ -13,12 +13,13 @@ type DependencyTracker interface {
 }
 
 type VNode struct {
-	ID        NodeID
-	Component any
-	Children  []*VNode
-	Signals   []reactive.SignalID
-	Dirty     bool
-	Parent    *VNode
+	ID           NodeID
+	Component    any
+	Children     []*VNode
+	Signals      []reactive.SignalID
+	Dirty        bool
+	DirtySignals []reactive.SignalID
+	Parent       *VNode
 }
 
 var vnodePool = sync.Pool{
@@ -94,8 +95,11 @@ func (n *VNode) AddSignal(id reactive.SignalID) {
 	n.Signals = append(n.Signals, id)
 }
 
-func (n *VNode) MarkDirty() {
+func (n *VNode) MarkDirty(sid ...reactive.SignalID) {
 	n.Dirty = true
+	if len(sid) > 0 {
+		n.DirtySignals = append(n.DirtySignals, sid...)
+	}
 	if n.Parent != nil {
 		n.Parent.MarkDirty()
 	}
@@ -107,6 +111,7 @@ func (n *VNode) IsDirty() bool {
 
 func (n *VNode) ClearDirty() {
 	n.Dirty = false
+	n.DirtySignals = n.DirtySignals[:0]
 	for _, child := range n.Children {
 		child.ClearDirty()
 	}

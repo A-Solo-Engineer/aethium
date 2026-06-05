@@ -70,25 +70,24 @@ func (s *Server) Stop() error {
 }
 
 func (s *Server) serveIndex(w http.ResponseWriter, r *http.Request) {
+	path := filepath.Join("platform", "webview", "assets", "index.html")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		// Fallback to minimal index
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(`<!DOCTYPE html><html><head><script src="/aethium.js"></script></head><body><canvas id="canvas" width="800" height="600"></canvas><script>Aethium.initRuntime('canvas');</script></body></html>`))
+		return
+	}
 	w.Header().Set("Content-Type", "text/html")
-	w.Write([]byte(`<!DOCTYPE html>
-<html>
-<head>
-    <title>Aethium App</title>
-    <script src="/aethium.js"></script>
-</head>
-<body>
-    <canvas id="canvas" width="800" height="600"></canvas>
-    <script>
-        // Initialize the runtime
-        Aethium.initRuntime('canvas');
-    </script>
-</body>
-</html>`))
+	w.Write(data)
 }
 
 func (s *Server) serveWasm(w http.ResponseWriter, r *http.Request) {
+	// Check in build path first, then current dir
 	wasmPath := filepath.Join(s.BuildPath, "app.wasm")
+	if _, err := os.Stat(wasmPath); err != nil {
+		wasmPath = "app.wasm"
+	}
 	data, err := os.ReadFile(wasmPath)
 	if err != nil {
 		http.Error(w, "app.wasm not found", http.StatusNotFound)
@@ -99,35 +98,14 @@ func (s *Server) serveWasm(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) serveJS(w http.ResponseWriter, r *http.Request) {
+	path := filepath.Join("platform", "webview", "assets", "aethium.js")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		http.Error(w, "aethium.js not found", http.StatusNotFound)
+		return
+	}
 	w.Header().Set("Content-Type", "application/javascript")
-	w.Write([]byte(`// Aethium JS Host Bridge
-// This is a placeholder for the actual JS bridge
-
-const Aethium = {
-    initRuntime: function(canvasID) {
-        console.log('Initializing runtime with canvas:', canvasID);
-        // Initialize the runtime here
-    },
-
-    renderFrame: function(dl) {
-        console.log('Rendering frame with', dl.Count(), 'commands');
-        // Render the frame here
-    },
-
-    scheduleOnUI: function(fn) {
-        queueMicrotask(fn);
-    },
-
-    pumpEvents: function() {
-        // Pump events from the UI queue
-    }
-};
-
-// Start the event loop
-setInterval(function() {
-    Aethium.pumpEvents();
-}, 16); // ~60 FPS
-`))
+	w.Write(data)
 }
 
 func openBrowser(url string) {

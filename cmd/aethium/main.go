@@ -4,6 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+
+	"github.com/A-Solo-Engineer/aethium/internal/build"
+	"github.com/A-Solo-Engineer/aethium/internal/devserver"
+	"github.com/A-Solo-Engineer/aethium/internal/scaffold"
 )
 
 func main() {
@@ -25,7 +29,10 @@ func main() {
 			newCmd.Usage()
 			os.Exit(1)
 		}
-		fmt.Printf("Scaffolding new app: module=%s template=%s dir=%s\n", *module, *template, *dir)
+		if err := scaffold.ScaffoldNew(*module, *dir, *template); err != nil {
+			fmt.Printf("Error scaffolding project: %v\n", err)
+			os.Exit(1)
+		}
 	case "build":
 		buildCmd := flag.NewFlagSet("build", flag.ExitOnError)
 		target := buildCmd.String("target", "desktop", "Target: wasm, desktop, or all")
@@ -33,19 +40,28 @@ func main() {
 		output := buildCmd.String("output", "dist/", "Output directory")
 		tags := buildCmd.String("tags", "", "Build tags")
 		buildCmd.Parse(os.Args[2:])
-		_ = *tags
-		fmt.Printf("Building for %s target...\n", *target)
-		fmt.Printf("Release: %v, Output: %s\n", *release, *output)
-		fmt.Println("Build complete (placeholder)")
+		cfg := build.BuildConfig{
+			Target:    *target,
+			Release:   *release,
+			OutputDir: *output,
+			Tags:      *tags,
+		}
+		if err := build.Build(cfg); err != nil {
+			fmt.Printf("Build failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Build complete")
 	case "dev":
 		devCmd := flag.NewFlagSet("dev", flag.ExitOnError)
 		target := devCmd.String("target", "wasm", "Target: wasm or desktop")
 		addr := devCmd.String("addr", "127.0.0.1:5173", "Bind address")
 		open := devCmd.Bool("open", false, "Open browser")
 		devCmd.Parse(os.Args[2:])
-		_ = *open
-		fmt.Printf("Starting dev server for %s target at %s\n", *target, *addr)
-		fmt.Println("Dev server running (placeholder)")
+		srv := devserver.New(*addr, *target, *open)
+		if err := srv.Start(); err != nil {
+			fmt.Printf("Dev server failed: %v\n", err)
+			os.Exit(1)
+		}
 	case "bundle":
 		bundleCmd := flag.NewFlagSet("bundle", flag.ExitOnError)
 		target := bundleCmd.String("target", "desktop", "Target: desktop or wasm")
@@ -73,4 +89,3 @@ func usage() {
 	fmt.Println()
 	fmt.Println("Run 'aethium <command> -h' for command-specific help")
 }
-
