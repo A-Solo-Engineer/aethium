@@ -133,6 +133,8 @@ func (r *Runtime) buildFrame(node *scene.VNode, dl *canvas.DrawList, index int) 
 	r.depMu.Lock()
 	r.currentNode = node
 	r.clearNodeDependencies(node)
+	// depMu must be unlocked before calling component methods;
+	// View() calls signal.Get() which calls Track() which acquires depMu.
 	r.depMu.Unlock()
 
 	// Call component Update if dirty
@@ -177,8 +179,36 @@ func (r *Runtime) Detach(root scene.NodeID) error {
 	if r.root == nil || r.root.ID != root {
 		return nil
 	}
+	err := r.unmountNode(r.root)
 	r.root = nil
-	return nil
+	return err
+}
+
+func (r *Runtime) unmountNode(node *scene.VNode) error {
+	if node == nil {
+		return nil
+	}
+	var firstErr error
+	// Unmount children first (post-order)
+	for _, child := range node.Children {
+		if err := r.unmountNode(child); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	if comp, ok := node.Component.(Component); ok {
+		if err := comp.Unmount(UnmountContext{Index: 0, Node: node}); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	// Remove dependency mappings for this node
+	r.clearNodeDependencies(node)
+
+	// Return node to pool
+	scene.ReleaseVNode(node)
+
+	return firstErr
 }
 
 func (r *Runtime) Track(id reactive.SignalID) {
@@ -201,16 +231,19 @@ func (r *Runtime) Track(id reactive.SignalID) {
 }
 
 func (r *Runtime) handleSignalChange(id reactive.SignalID) {
-	r.depMu.Lock()
-	nodes, ok := r.signalNodes[id]
-	r.depMu.Unlock()
-	if !ok {
-		return
-	}
+	// Notify must schedule on the UI to avoid data races with Tick().
+	r.ScheduleOnUI(func() {
+		r.depMu.Lock()
+		nodes, ok := r.signalNodes[id]
+		r.depMu.Unlock()
+		if !ok {
+			return
+		}
 
-	for _, node := range nodes {
-		node.MarkDirty()
-	}
+		for _, node := range nodes {
+			node.MarkDirty()
+		}
+	})
 }
 
 func (r *Runtime) clearNodeDependencies(node *scene.VNode) {

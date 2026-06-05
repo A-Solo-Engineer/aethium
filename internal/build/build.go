@@ -36,7 +36,7 @@ func buildWasm(cfg BuildConfig) error {
 	fmt.Println("Building for Wasm (TinyGo)...")
 
 	// TinyGo build command
-	cmd := exec.Command("tinygo", "build", "-o", filepath.Join(cfg.OutputDir, "app.wasm"), "-target=wasm", "-tags=tinygo,js", ".")
+	cmd := exec.Command("tinygo", "build", "-o", filepath.Join(cfg.OutputDir, "app.wasm"), "-target=wasm", "-tags=tinygo", ".")
 	cmd.Dir = cfg.OutputDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -71,4 +71,3 @@ func buildDesktop(cfg BuildConfig) error {
 	fmt.Println("Desktop build complete")
 	return nil
 }
-

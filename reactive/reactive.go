@@ -197,11 +197,8 @@ func Notify(id SignalID) {
     }
 }
 
-func notifyLocked(id SignalID) {
-    for _, cb := range subscribers {
-        cb()
-    }
-}
+// notifyLocked removed: it read subscribers without holding the lock
+// and was unused. Effects should be scheduled via an EffectRuntime.
 
 func NewComputed[T comparable](deps func() []SignalID, compute func() T) *Computed[T] {
     c := &Computed[T]{
@@ -209,7 +206,23 @@ func NewComputed[T comparable](deps func() []SignalID, compute func() T) *Comput
         deps:    deps,
         compute: compute,
         cached:  compute(),
+        dirty:   false,
     }
+
+    // Subscribe to all signal changes and invalidate when a dependency changes.
+    // This uses SubscribeAll to observe signal notifications and then checks
+    // whether the changed signal is one of this computed's dependencies.
+    _, _ = SubscribeAll(func(sid SignalID) {
+        for _, d := range c.deps() {
+            if d == sid {
+                c.Invalidate()
+                // Notify dependents of this computed that it became stale.
+                Notify(c.id)
+                return
+            }
+        }
+    })
+
     return c
 }
 
@@ -217,9 +230,16 @@ func (c *Computed[T]) Get() T {
     if tracker := CurrentTracker(); tracker != nil {
         tracker.Track(c.id)
     }
-    c.mu.RLock()
+    c.mu.Lock()
+    if c.dirty {
+        newVal := c.compute()
+        if newVal != c.cached {
+            c.cached = newVal
+        }
+        c.dirty = false
+    }
     value := c.cached
-    c.mu.RUnlock()
+    c.mu.Unlock()
     return value
 }
 
@@ -233,33 +253,8 @@ func (c *Computed[T]) Invalidate() {
     c.mu.Unlock()
 }
 
-func (c *Computed[T]) Update() {
-    c.mu.Lock()
-    if c.dirty {
-        c.cached = c.compute()
-        c.dirty = false
-    }
-    c.mu.Unlock()
-}
-
-func NewEffect(fn func(ctx EffectContext)) EffectID {
-    effectMu.Lock()
-    effectSeq++
-    id := effectSeq
-    effect := &Effect{
-        id:     id,
-        fn:     fn,
-        active: true,
-    }
-    effects[id] = effect
-    effectMu.Unlock()
-
-    go func() {
-        effect.fn(EffectContext{Ctx: context.Background()})
-    }()
-
-    return id
-}
+// NewEffect removed: effects must be created with a runtime to ensure
+// execution is routed through ScheduleOnUI and avoid data races.
 
 func NewEffectWithRuntime(rt EffectRuntime, fn func(ctx EffectContext)) EffectID {
     effectMu.Lock()
@@ -273,9 +268,17 @@ func NewEffectWithRuntime(rt EffectRuntime, fn func(ctx EffectContext)) EffectID
     effects[id] = effect
     effectMu.Unlock()
 
-    go func() {
-        effect.fn(EffectContext{Ctx: context.Background(), Runtime: rt})
-    }()
+    // Route effect execution through the runtime's UI scheduler to avoid
+    // data races with Computed.Get() and CurrentTracker access.
+    rt.ScheduleOnUI(func() {
+        effectMu.Lock()
+        e, ok := effects[id]
+        effectMu.Unlock()
+        if !ok || !e.IsActive() {
+            return
+        }
+        e.fn(EffectContext{Ctx: context.Background(), Runtime: rt})
+    })
 
     return id
 }

@@ -62,42 +62,34 @@ func main() {
 
 import (
 	"fmt"
+
 	"github.com/A-Solo-Engineer/aethium/canvas"
+	"github.com/A-Solo-Engineer/aethium/reactive"
 	"github.com/A-Solo-Engineer/aethium/runtime"
 )
 
 type Counter struct {
-	count *runtime.Signal[int]
+	count *reactive.Signal[int]
 }
 
 func NewCounter() *Counter {
-	return &Counter{
-		count: runtime.NewSignal(0),
-	}
+	return &Counter{count: reactive.NewSignal(0)}
 }
 
-func (c *Counter) Init(ctx runtime.InitContext) error {
-	return nil
-}
-
-func (c *Counter) Mount(ctx runtime.MountContext) error {
-	return nil
-}
-
-func (c *Counter) Update(ctx runtime.UpdateContext) error {
-	return nil
-}
-
-func (c *Counter) Unmount(ctx runtime.UnmountContext) error {
-	return nil
-}
+func (c *Counter) Init(ctx runtime.InitContext) error  { return nil }
+func (c *Counter) Mount(ctx runtime.MountContext) error { return nil }
+func (c *Counter) Update(ctx runtime.UpdateContext) error { return nil }
+func (c *Counter) Unmount(ctx runtime.UnmountContext) error { return nil }
 
 func (c *Counter) View() []canvas.DrawCmd {
 	count := c.count.Get()
-	return []canvas.DrawCmd{
-		canvas.FillRect(canvas.Rect{X: 10, Y: 10, W: 100, H: 50}, 0xFF0000FF),
-		canvas.DrawText(120, 35, fmt.Sprintf("Count: %d", count), 0xFFFFFFFF),
-	}
+	dl := canvas.NewDrawList()
+	defer dl.Release()
+	canvas.FillRect(dl, canvas.Rect{X: 10, Y: 10, W: 100, H: 50}, 0xFF0000FF)
+	canvas.DrawText(dl, 120, 35, fmt.Sprintf("Count: %d", count), 0xFFFFFFFF)
+	cmds := make([]canvas.DrawCmd, len(dl.Cmds))
+	copy(cmds, dl.Cmds)
+	return cmds
 }
 `
 	if err := writeTemplate(filepath.Join(cfg.Dir, "app", "view.go"), viewGo, cfg); err != nil {
@@ -107,11 +99,26 @@ func (c *Counter) View() []canvas.DrawCmd {
 	// Create app/state.go
 	stateGo := `package app
 
-import "github.com/A-Solo-Engineer/aethium/runtime"
+import (
+	"fmt"
+
+	"github.com/A-Solo-Engineer/aethium/runtime"
+)
 
 func Run() {
 	fmt.Println("Aethium app starting...")
-	// Initialize runtime and start the app
+	rt := runtime.NewRuntime(nil)
+	counter := NewCounter()
+	if err := rt.Attach(counter); err != nil {
+		fmt.Printf("attach error: %v\n", err)
+		return
+	}
+	for {
+		if err := rt.Tick(); err != nil {
+			fmt.Printf("tick error: %v\n", err)
+			return
+		}
+	}
 }
 `
 	if err := writeTemplate(filepath.Join(cfg.Dir, "app", "state.go"), stateGo, cfg); err != nil {

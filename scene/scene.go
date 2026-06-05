@@ -21,6 +21,10 @@ type VNode struct {
 	Parent    *VNode
 }
 
+var vnodePool = sync.Pool{
+	New: func() any { return &VNode{} },
+}
+
 type MountContext struct {
 	Index int
 }
@@ -59,10 +63,19 @@ func newNodeID() NodeID {
 }
 
 func NewVNode(component any) *VNode {
-	return &VNode{
-		ID:        newNodeID(),
-		Component: component,
+	n := vnodePool.Get().(*VNode)
+	n.Reset()
+	n.ID = newNodeID()
+	n.Component = component
+	return n
+}
+
+func ReleaseVNode(n *VNode) {
+	if n == nil {
+		return
 	}
+	n.Reset()
+	vnodePool.Put(n)
 }
 
 func (n *VNode) Reset() {

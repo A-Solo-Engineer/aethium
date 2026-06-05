@@ -92,8 +92,9 @@ GPU / canvas repaint (immediate-mode)
 |------|------|----------|----------------|
 | `vnodePool` | `*scene.VNode` | `Init` / tree expand | `Reset()` clears `Children`, `Signals`, `Component` ref; zero `ID` |
 | `drawCmdPool` | `[]canvas.DrawCmd` | each `Build` | `cmds = cmds[:0]`; do not retain pointers to sub-slices |
-| `subscriberPool` | `*reactive.Subscriber` | `signal.Subscribe` | `Reset()` clears `SignalIDs`, `Callback` |
 | `dirtyListPool` | `[]scene.NodeID` | `MarkDirty` burst | `ids = ids[:0]` |
+
+`subscriberPool` (planned) — Not implemented: subscribers are stored as map entries (`map[SubscriberID]func()`)
 
 Global pools (package-level):
 
@@ -170,9 +171,10 @@ func releaseVNode(n *scene.VNode) {
 
 ### Side effects
 
-**Construct:** `reactive.Effect(func(ctx EffectContext))`
+- **Public API:** `NewEffectWithRuntime(rt EffectRuntime, fn func(ctx EffectContext)) EffectID`
 
-- **Not** part of the render graph. Effects run **after** `Runtime.Tick` paint, on UI thread, coalesced per frame max once per Effect instance.
+- Effects must be created with an `EffectRuntime` so execution can be routed through `ScheduleOnUI` and avoid data races with `Computed.Get()`.
+- `NewEffect` (no runtime) was removed during Stage 2. Effects without a runtime are unsafe and may cause data races.
 - Allowed: network (`http.Client`), file I/O initiation, `ScheduleOnUI` follow-ups.
 - Forbidden inside `Build`: any blocking I/O or `Effect` registration.
 
@@ -218,6 +220,14 @@ Calling `signal.Set` from a worker without `ScheduleOnUI` is a **data race** on 
 ---
 
 ## Cross-reference
+
+## Implementation Deviations from Stage 1 Spec
+
+| Decision | Stage 1 Spec | Stage 2 Reality | Reason |
+|---|---|---|---|
+| `subscriberPool` | Pooled `*reactive.Subscriber` | Map entries `map[SubscriberID]func()` | Subscribers are long-lived; pooling adds complexity without GC benefit at current scale |
+| `NewEffect` | Existed as a no-runtime variant | Removed | Unsound without `ScheduleOnUI`; data race on `CurrentTracker` |
+| `Signal` mutex | `sync.Mutex` in spec pseudocode | `sync.RWMutex` | Read-heavy workload; `RLock` in `Get()` reduces contention |
 
 | Item | Location |
 |------|----------|

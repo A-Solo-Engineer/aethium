@@ -112,7 +112,7 @@ Aethium will **never**:
 |----------|---------|
 | `ARCHITECTURE.md` | Rendering, Wasm toolchain, concurrency, lifecycle, desktop strategy |
 | `STATE_MANAGEMENT.md` | Signals, pools, derived state, locking |
-| `BUILD_SYSTEM.md` | CLI contract, budgets, dev server |
 | `CONTRIBUTING.md` | Governance, PRs, AGPL contribution policy |
+| `BUILD_SYSTEM.md` | CLI contract, budgets, dev server |
 
 **Stage gate:** No framework or application code until the maintainer types: **`APPROVED — proceed to Stage 2`**.

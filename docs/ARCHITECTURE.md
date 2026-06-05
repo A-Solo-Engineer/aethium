@@ -111,7 +111,7 @@ Lifecycle is identical on Wasm and desktop; only the canvas backend differs.
 ### Core interfaces (binding names)
 
 ```go
-// Package: github.com/aethium-dev/aethium/runtime
+// Package: github.com/A-Solo-Engineer/aethium/runtime
 
 type Component interface {
     Init(ctx InitContext) error
@@ -121,38 +121,32 @@ type Component interface {
 }
 
 type InitContext struct {
-    Props   any // type-assert per component
+    Props   any
     Runtime *Runtime
 }
 
 type MountContext struct {
-    InitContext
-    Node *VNode
+    Index int
+    Node  *scene.VNode
 }
 
 type UpdateContext struct {
-    MountContext
-    Dirty []SignalID
+    Index int
+    Dirty []reactive.SignalID
+    Node  *scene.VNode
 }
 
 type UnmountContext struct {
-    MountContext
-}
-
-type VNode struct {
-    ID       NodeID
-    Component Component
-    Children []*VNode
-    Signals  []SignalID
-    // pooled; Reset() clears before Put
+    Index int
+    Node  *scene.VNode
 }
 ```
 
 ### Runtime orchestration
 
 - `Runtime.Attach(root Component) error` — builds tree, runs Init→Mount depth-first.
-- `Runtime.Tick(frame FrameInfo)` — drains UI queue, flushes signals, runs Update on dirty subtrees, emits draw list.
-- `Runtime.Detach(root NodeID)` — Unmount subtree.
+- `Runtime.Tick() error` — drains UI queue, flushes signals, runs Update on dirty subtrees, emits draw list.
+- `Runtime.Detach(root scene.NodeID) error` — Unmount subtree.
 
 **Hand-off to state:** Signals are defined in `STATE_MANAGEMENT.md` (`Signal[T]`, `SignalID`). Components read signals in `Build` (via `View` functions returning `DrawCmd` slices)—not in Init.
 
@@ -222,6 +216,14 @@ FRAMEWORK LAYER (Go modules)
 ```
 
 ---
+
+## Implementation Deviations from Stage 1 Spec
+
+| Decision | Stage 1 Spec | Stage 2 Reality | Reason |
+|---|---|---|---|
+| Context embedding | `MountContext` embedded `InitContext` | Flat structs with `Index` and `Node` fields | Simpler pool-friendliness; embedding caused field shadowing |
+| `Runtime.Tick` signature | `Tick(frame FrameInfo)` | `Tick() error` | `FrameInfo` deferred; frame counter managed internally via `GetFrame()` |
+| VNode pool | Described in STATE_MANAGEMENT.md | Implemented in `scene/scene.go` as `vnodePool sync.Pool` | Correctly placed; pool is scene-layer concern |
 
 ## Consistency references
 

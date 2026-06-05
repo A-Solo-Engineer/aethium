@@ -45,7 +45,13 @@ Every PR must satisfy **all** applicable items (checklist in PR template):
 - [ ] `go test ./...` passes on **Go 1.22.7+** (native packages)
 - [ ] `tinygo build` passes for packages tagged `//go:build tinygo` (CI)
 - [ ] `go vet ./...` clean
-- [ ] **AGPL-3.0** license header on new files (`Copyright ... SPDX-License-Identifier: AGPL-3.0-only`)
+- [ ] **AGPL-3.0** license header on new files with module line, for example:
+
+```
+// Copyright YEAR Name
+// SPDX-License-Identifier: AGPL-3.0-only
+// Module: github.com/A-Solo-Engineer/aethium
+```
 - [ ] CHANGELOG.md entry under `Unreleased` (user-facing) or `Internal` (refactor)
 - [ ] No new core dependencies without RFC reference number
 
@@ -82,6 +88,8 @@ Report format in PR:
 | ... | | | | |
 
 CI will run benches on `ubuntu-latest` and fail if regression exceeds threshold without `benchmark-approved` label (maintainer only).
+
+Note: `BenchmarkTick` and `BenchmarkSignalNotify` are exit-criteria benchmarks for Stage 2 and must be added as tests in `runtime/runtime_test.go` and `reactive/reactive_test.go` before the `v0.1` tag; until then, PRs must include manual timing results in the PR description.
 
 ---
 

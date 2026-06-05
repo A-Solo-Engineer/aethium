@@ -8,7 +8,7 @@ Aligned with `ARCHITECTURE.md`: TinyGo for browser, Go 1.22+ for desktop, WebVie
 
 ## CLI Tool Design
 
-Binary name: **`aethium`**. Module: `github.com/aethium-dev/aethium/cmd/aethium`.
+Binary name: **`aethium`**. Module: `github.com/A-Solo-Engineer/aethium/cmd/aethium`.
 
 ### `aethium new`
 
@@ -27,6 +27,7 @@ Scaffold a project.
   go.mod
   main.go
   app/view.go
+  app/state.go
   aethium.toml
 ```
 
@@ -138,7 +139,7 @@ Deploy to any static host; no server required for default apps.
 
 ## Dependency Philosophy
 
-**Framework core (`github.com/aethium-dev/aethium/...`):**
+**Framework core (`github.com/A-Solo-Engineer/aethium/...`):**
 
 - **Minimal allowlist** — stdlib-first; third-party modules require RFC + size audit.
 - **Allowed without RFC (Stage 2):**
@@ -149,6 +150,8 @@ Deploy to any static host; no server required for default apps.
 **Rationale:** Supply-chain and binary-size risk concentrate in the engine; AGPL core must be auditable in < 1 day.
 
 **TinyGo:** Core packages must compile under TinyGo 0.34.0; CI runs `tinygo build` on every core PR.
+
+**Known deviation:** `build/build.go` currently passes `-tags=tinygo,js` to the TinyGo CLI while `platform/js/js_stub.go` uses `//go:build tinygo`. This mismatch is tracked in `docs/exceptions/tinygo-tag-mismatch.md` and will be corrected in a follow-up patch.
 
 ---
 
@@ -210,10 +213,12 @@ _Implemented after Stage 2. Template:_
 ## Benchmark Report (measured YYYY-MM-DD)
 
 | Criterion | Target | Measured | Pass |
-|-----------|--------|----------|------|
+|---|---|---|---|
 | Desktop binary | ≤ 5 MB | TBD | TBD |
 | Wasm gzip total | ≤ 500 KB | TBD | TBD |
 | Cold startup desktop p50 | ≤ 150 ms | TBD | TBD |
+| Cold startup browser p50 | ≤ 300 ms | TBD | TBD |
+| Idle RAM desktop | ≤ 40 MB | TBD | TBD |
 ```
 
 ---
