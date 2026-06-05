@@ -1,6 +1,6 @@
 package platform
 
-import "github.com/aethium-dev/aethium/canvas"
+import "github.com/A-Solo-Engineer/aethium/canvas"
 
 type Backend interface {
 	Render(dl *canvas.DrawList) error

@@ -9,7 +9,7 @@ import (
 func main() {
 	if len(os.Args) < 2 {
 		usage()
-		return
+		os.Exit(1)
 	}
 
 	cmd := os.Args[1]
@@ -20,20 +20,57 @@ func main() {
 		template := newCmd.String("template", "minimal", "Template to scaffold")
 		dir := newCmd.String("dir", ".", "Output directory")
 		newCmd.Parse(os.Args[2:])
-		fmt.Printf("scaffold new app: module=%s template=%s dir=%s\n", *module, *template, *dir)
+		if *module == "" {
+			fmt.Println("Error: --module is required")
+			newCmd.Usage()
+			os.Exit(1)
+		}
+		fmt.Printf("Scaffolding new app: module=%s template=%s dir=%s\n", *module, *template, *dir)
 	case "build":
-		fmt.Println("build command placeholder")
+		buildCmd := flag.NewFlagSet("build", flag.ExitOnError)
+		target := buildCmd.String("target", "desktop", "Target: wasm, desktop, or all")
+		release := buildCmd.Bool("release", true, "Release build")
+		output := buildCmd.String("output", "dist/", "Output directory")
+		tags := buildCmd.String("tags", "", "Build tags")
+		buildCmd.Parse(os.Args[2:])
+		_ = *tags
+		fmt.Printf("Building for %s target...\n", *target)
+		fmt.Printf("Release: %v, Output: %s\n", *release, *output)
+		fmt.Println("Build complete (placeholder)")
 	case "dev":
-		fmt.Println("dev server placeholder")
+		devCmd := flag.NewFlagSet("dev", flag.ExitOnError)
+		target := devCmd.String("target", "wasm", "Target: wasm or desktop")
+		addr := devCmd.String("addr", "127.0.0.1:5173", "Bind address")
+		open := devCmd.Bool("open", false, "Open browser")
+		devCmd.Parse(os.Args[2:])
+		_ = *open
+		fmt.Printf("Starting dev server for %s target at %s\n", *target, *addr)
+		fmt.Println("Dev server running (placeholder)")
 	case "bundle":
-		fmt.Println("bundle command placeholder")
+		bundleCmd := flag.NewFlagSet("bundle", flag.ExitOnError)
+		target := bundleCmd.String("target", "desktop", "Target: desktop or wasm")
+		format := bundleCmd.String("format", "native", "Format: native or wasm")
+		output := bundleCmd.String("output", "dist/bundle", "Output file")
+		bundleCmd.Parse(os.Args[2:])
+		fmt.Printf("Creating bundle for %s target in %s format\n", *target, *format)
+		fmt.Printf("Output: %s\n", *output)
+		fmt.Println("Bundle created (placeholder)")
 	default:
-		fmt.Printf("unknown command: %s\n", cmd)
+		fmt.Printf("Unknown command: %s\n", cmd)
 		usage()
+		os.Exit(1)
 	}
 }
 
 func usage() {
 	fmt.Println("Usage: aethium <command> [flags]")
-	fmt.Println("Commands: new, build, dev, bundle")
+	fmt.Println()
+	fmt.Println("Commands:")
+	fmt.Println("  new       Scaffold a new project")
+	fmt.Println("  build     Build the application")
+	fmt.Println("  dev       Start development server")
+	fmt.Println("  bundle    Create a distributable bundle")
+	fmt.Println()
+	fmt.Println("Run 'aethium <command> -h' for command-specific help")
 }
+

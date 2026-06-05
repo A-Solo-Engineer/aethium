@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Aethium</title>
+  <script src="/aethium.js"></script>
+</head>
+<body>
+  <canvas id="canvas" width="800" height="600"></canvas>
+  <script>
+    if (window.Aethium && typeof Aethium.initRuntime === 'function') {
+      Aethium.initRuntime('canvas');
+    }
+  </script>
+</body>
+</html>

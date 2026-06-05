@@ -10,171 +10,289 @@ type SubscriberID uint64
 type EffectID uint64
 
 type DependencyTracker interface {
-	Track(SignalID)
+    Track(SignalID)
 }
 
 type EffectRuntime interface {
-	ScheduleOnUI(fn func())
+    ScheduleOnUI(fn func())
 }
 
 type EffectContext struct {
-	Ctx     context.Context
-	Runtime EffectRuntime
+    Ctx     context.Context
+    Runtime EffectRuntime
 }
 
 type Signal[T comparable] struct {
-	mu    sync.RWMutex
-	id    SignalID
-	value T
-}
-
-type Subscriber struct {
-	id SubscriberID
-	cb func()
+    mu    sync.RWMutex
+    id    SignalID
+    value T
 }
 
 type Computed[T comparable] struct {
-	id      SignalID
-	deps    func() []SignalID
-	compute func() T
-	cached  T
-	mu      sync.RWMutex
+    id      SignalID
+    deps    func() []SignalID
+    compute func() T
+    cached  T
+    mu      sync.RWMutex
+    dirty   bool
+}
+
+type Effect struct {
+    id     EffectID
+    fn     func(ctx EffectContext)
+    mu     sync.RWMutex
+    active bool
 }
 
 var (
-	currentTracker DependencyTracker
-	trackerMu      sync.RWMutex
+    currentTracker DependencyTracker
+    trackerMu      sync.RWMutex
 
-	subscriberMu sync.Mutex
-	subSeq       SubscriberID
-	subscribers  = map[SubscriberID]func(){}
+    subscriberMu sync.Mutex
+    subSeq       SubscriberID
+    subscribers  = map[SubscriberID]func(){}
 
-	signalSeq   SignalID
-	signalSeqMu sync.Mutex
+    signalSubscriberMu sync.Mutex
+    signalSubscribers  = map[SignalID]map[SubscriberID]func(SignalID){}
+
+    effectMu sync.Mutex
+    effectSeq EffectID
+    effects  = map[EffectID]*Effect{}
+
+    signalSeq   SignalID
+    signalSeqMu sync.Mutex
 )
 
 func SetDependencyTracker(t DependencyTracker) {
-	trackerMu.Lock()
-	currentTracker = t
-	trackerMu.Unlock()
+    trackerMu.Lock()
+    currentTracker = t
+    trackerMu.Unlock()
 }
 
 func CurrentTracker() DependencyTracker {
-	trackerMu.RLock()
-	defer trackerMu.RUnlock()
-	return currentTracker
+    trackerMu.RLock()
+    defer trackerMu.RUnlock()
+    return currentTracker
 }
 
 func newSignalID() SignalID {
-	signalSeqMu.Lock()
-	signalSeq++
-	id := signalSeq
-	signalSeqMu.Unlock()
-	return id
+    signalSeqMu.Lock()
+    signalSeq++
+    id := signalSeq
+    signalSeqMu.Unlock()
+    return id
 }
 
 func NewSignal[T comparable](initial T) *Signal[T] {
-	return &Signal[T]{id: newSignalID(), value: initial}
+    return &Signal[T]{id: newSignalID(), value: initial}
 }
 
 func (s *Signal[T]) ID() SignalID {
-	return s.id
+    return s.id
 }
 
 func (s *Signal[T]) Get() T {
-	s.mu.RLock()
-	value := s.value
-	s.mu.RUnlock()
+    s.mu.RLock()
+    value := s.value
+    s.mu.RUnlock()
 
-	if tracker := CurrentTracker(); tracker != nil {
-		tracker.Track(s.id)
-	}
+    if tracker := CurrentTracker(); tracker != nil {
+        tracker.Track(s.id)
+    }
 
-	return value
+    return value
 }
 
 func (s *Signal[T]) Set(v T) {
-	s.mu.Lock()
-	if s.value != v {
-		s.value = v
-		notifyLocked(s.id)
-	}
-	s.mu.Unlock()
+    s.mu.Lock()
+    changed := s.value != v
+    if changed {
+        s.value = v
+    }
+    s.mu.Unlock()
+
+    if changed {
+        Notify(s.id)
+    }
 }
 
 func (s *Signal[T]) Peek() T {
-	s.mu.RLock()
-	value := s.value
-	s.mu.RUnlock()
-	return value
+    s.mu.RLock()
+    value := s.value
+    s.mu.RUnlock()
+    return value
 }
 
 func Subscribe(cb func()) (SubscriberID, func()) {
-	subscriberMu.Lock()
-	subSeq++
-	id := subscriberSeq
-	subscribers[id] = cb
-	subscriberMu.Unlock()
+    subscriberMu.Lock()
+    subSeq++
+    id := subSeq
+    subscribers[id] = cb
+    subscriberMu.Unlock()
 
-	return id, func() {
-		Unsubscribe(id)
-	}
+    return id, func() {
+        Unsubscribe(id)
+    }
+}
+
+func SubscribeAll(cb func(SignalID)) (SubscriberID, func()) {
+    signalSubscriberMu.Lock()
+    subSeq++
+    id := subSeq
+    if signalSubscribers == nil {
+        signalSubscribers = map[SignalID]map[SubscriberID]func(SignalID){}
+    }
+    if signalSubscribers[0] == nil {
+        signalSubscribers[0] = map[SubscriberID]func(SignalID){}
+    }
+    signalSubscribers[0][id] = cb
+    signalSubscriberMu.Unlock()
+
+    return id, func() {
+        UnsubscribeAll(id)
+    }
 }
 
 func Unsubscribe(id SubscriberID) {
-	subscriberMu.Lock()
-	delete(subscribers, id)
-	subscriberMu.Unlock()
+    subscriberMu.Lock()
+    delete(subscribers, id)
+    subscriberMu.Unlock()
+
+    UnsubscribeAll(id)
+}
+
+func UnsubscribeAll(id SubscriberID) {
+    signalSubscriberMu.Lock()
+    for signalID, listeners := range signalSubscribers {
+        delete(listeners, id)
+        if len(listeners) == 0 {
+            delete(signalSubscribers, signalID)
+        }
+    }
+    signalSubscriberMu.Unlock()
 }
 
 func Notify(id SignalID) {
-	subscriberMu.Lock()
-	subs := make([]func(), 0, len(subscribers))
-	for _, cb := range subscribers {
-		subs = append(subs, cb)
-	}
-	subscriberMu.Unlock()
+    subscriberMu.Lock()
+    subs := make([]func(), 0, len(subscribers))
+    for _, cb := range subscribers {
+        subs = append(subs, cb)
+    }
+    subscriberMu.Unlock()
 
-	for _, cb := range subs {
-		cb()
-	}
+    signalSubscriberMu.Lock()
+    signalSubs := make([]func(SignalID), 0)
+    for _, listeners := range signalSubscribers {
+        for _, cb := range listeners {
+            signalSubs = append(signalSubs, cb)
+        }
+    }
+    signalSubscriberMu.Unlock()
+
+    for _, cb := range subs {
+        cb()
+    }
+    for _, cb := range signalSubs {
+        cb(id)
+    }
 }
 
 func notifyLocked(id SignalID) {
-	for _, cb := range subscribers {
-		cb()
-	}
+    for _, cb := range subscribers {
+        cb()
+    }
 }
 
 func NewComputed[T comparable](deps func() []SignalID, compute func() T) *Computed[T] {
-	c := &Computed[T]{
-		id:      newSignalID(),
-		deps:    deps,
-		compute: compute,
-	}
-	c.cached = compute()
-	return c
+    c := &Computed[T]{
+        id:      newSignalID(),
+        deps:    deps,
+        compute: compute,
+        cached:  compute(),
+    }
+    return c
 }
 
 func (c *Computed[T]) Get() T {
-	if tracker := CurrentTracker(); tracker != nil {
-		tracker.Track(c.id)
-	}
-	c.mu.RLock()
-	value := c.cached
-	c.mu.RUnlock()
-	return value
+    if tracker := CurrentTracker(); tracker != nil {
+        tracker.Track(c.id)
+    }
+    c.mu.RLock()
+    value := c.cached
+    c.mu.RUnlock()
+    return value
 }
 
 func (c *Computed[T]) SignalID() SignalID {
-	return c.id
+    return c.id
+}
+
+func (c *Computed[T]) Invalidate() {
+    c.mu.Lock()
+    c.dirty = true
+    c.mu.Unlock()
+}
+
+func (c *Computed[T]) Update() {
+    c.mu.Lock()
+    if c.dirty {
+        c.cached = c.compute()
+        c.dirty = false
+    }
+    c.mu.Unlock()
 }
 
 func NewEffect(fn func(ctx EffectContext)) EffectID {
-	go fn(EffectContext{Ctx: context.Background()})
-	return EffectID(0)
+    effectMu.Lock()
+    effectSeq++
+    id := effectSeq
+    effect := &Effect{
+        id:     id,
+        fn:     fn,
+        active: true,
+    }
+    effects[id] = effect
+    effectMu.Unlock()
+
+    go func() {
+        effect.fn(EffectContext{Ctx: context.Background()})
+    }()
+
+    return id
+}
+
+func NewEffectWithRuntime(rt EffectRuntime, fn func(ctx EffectContext)) EffectID {
+    effectMu.Lock()
+    effectSeq++
+    id := effectSeq
+    effect := &Effect{
+        id:     id,
+        fn:     fn,
+        active: true,
+    }
+    effects[id] = effect
+    effectMu.Unlock()
+
+    go func() {
+        effect.fn(EffectContext{Ctx: context.Background(), Runtime: rt})
+    }()
+
+    return id
 }
 
 func DisposeEffect(id EffectID) {
-	// no-op placeholder for effect disposal
+    effectMu.Lock()
+    if effect, ok := effects[id]; ok {
+        effect.mu.Lock()
+        effect.active = false
+        effect.mu.Unlock()
+        delete(effects, id)
+    }
+    effectMu.Unlock()
+}
+
+func (e *Effect) IsActive() bool {
+    e.mu.RLock()
+    defer e.mu.RUnlock()
+    return e.active
 }

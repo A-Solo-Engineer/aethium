@@ -1,7 +1,16 @@
 package main
 
-import "github.com/aethium-dev/aethium/examples/hello/app"
+import (
+	"os"
+
+	"github.com/A-Solo-Engineer/aethium/examples/hello/app"
+)
 
 func main() {
-	app.Run()
+	if len(os.Args) > 1 && os.Args[1] == "dev" {
+		app.RunDev()
+	} else {
+		app.Run()
+	}
 }
+

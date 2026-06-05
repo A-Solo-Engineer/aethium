@@ -1,3 +1,3 @@
-module github.com/aethium-dev/aethium
+module github.com/A-Solo-Engineer/aethium
 
 go 1.22

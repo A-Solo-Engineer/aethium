@@ -1,6 +1,8 @@
 package canvas
 
-import "sync"
+import (
+	"sync"
+)
 
 type CmdKind uint8
 
@@ -15,11 +17,11 @@ const (
 type Color uint32 // ARGB, 0xAARRGGBB
 
 type DrawCmd struct {
-	Kind      CmdKind
+	Kind       CmdKind
 	X, Y, W, H float32
-	Color     Color
-	Text      string
-	Transform [6]float32
+	Color      Color
+	Text       string
+	Transform  [6]float32
 }
 
 type DrawList struct {
@@ -86,4 +88,50 @@ func Clip(dl *DrawList, r Rect) {
 
 func Transform(dl *DrawList, matrix [6]float32) {
 	dl.Append(DrawCmd{Kind: CmdTransform, Transform: matrix})
+}
+
+// Render executes all draw commands in the list
+func (dl *DrawList) Render() {
+	for _, cmd := range dl.Cmds {
+		switch cmd.Kind {
+		case CmdFillRect:
+			// FillRect implementation would go here
+		case CmdStrokeRect:
+			// StrokeRect implementation would go here
+		case CmdDrawText:
+			// DrawText implementation would go here
+		case CmdClip:
+			// Clip implementation would go here
+		case CmdTransform:
+			// Transform implementation would go here
+		}
+	}
+}
+
+// Reset clears the draw list without releasing to pool
+func (dl *DrawList) Reset() {
+	if dl == nil {
+		return
+	}
+	dl.Cmds = dl.Cmds[:0]
+}
+
+// Cap ensures the draw list has at least the specified capacity
+func (dl *DrawList) Cap(capacity int) {
+	if dl == nil {
+		return
+	}
+	if cap(dl.Cmds) < capacity {
+		newCmds := make([]DrawCmd, 0, capacity)
+		newCmds = append(newCmds, dl.Cmds...)
+		dl.Cmds = newCmds
+	}
+}
+
+// Count returns the number of commands in the draw list
+func (dl *DrawList) Count() int {
+	if dl == nil {
+		return 0
+	}
+	return len(dl.Cmds)
 }
