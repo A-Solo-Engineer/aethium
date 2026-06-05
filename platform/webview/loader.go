@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"os"
 	"path/filepath"
 
 	"github.com/A-Solo-Engineer/aethium/platform"
@@ -66,8 +67,26 @@ func (l *Loader) serveJS(w http.ResponseWriter, r *http.Request) {
 }
 
 func EmbedAssets(wasmPath, jsPath string) error {
-	// Embed assets from files
-	// This is a placeholder for the actual embedding logic
+	// Copy the provided WASM and JS files into the assets directory
+	// so they can be embedded in the next build.
+	if wasmPath != "" {
+		data, err := os.ReadFile(wasmPath)
+		if err != nil {
+			return fmt.Errorf("failed to read WASM: %w", err)
+		}
+		if err := os.WriteFile("platform/webview/assets/app.wasm", data, 0644); err != nil {
+			return fmt.Errorf("failed to write WASM asset: %w", err)
+		}
+	}
+	if jsPath != "" {
+		data, err := os.ReadFile(jsPath)
+		if err != nil {
+			return fmt.Errorf("failed to read JS: %w", err)
+		}
+		if err := os.WriteFile("platform/webview/assets/aethium.js", data, 0644); err != nil {
+			return fmt.Errorf("failed to write JS asset: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -78,4 +97,3 @@ func GetEmbeddedAssets() (fs.FS, error) {
 func GetAssetPath(name string) (string, error) {
 	return filepath.Join("assets", name), nil
 }
-

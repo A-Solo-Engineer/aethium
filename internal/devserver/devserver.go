@@ -19,9 +19,9 @@ type Server struct {
 
 func New(addr, target string, open bool) *Server {
 	return &Server{
-		Addr:    addr,
-		Target:  target,
-		Open:    open,
+		Addr:      addr,
+		Target:    target,
+		Open:      open,
 		BuildPath: ".",
 	}
 }
@@ -32,34 +32,45 @@ func (s *Server) Start() error {
 	}
 
 	// Start build process in background
-	s.BuildCmd = exec.Command("go", "run", ".")
-	s.BuildCmd.Dir = s.BuildPath
-	s.BuildCmd.Stdout = os.Stdout
-	s.BuildCmd.Stderr = os.Stderr
+	go func() {
+		fmt.Println("Starting initial build...")
+		// Use 'go build' instead of 'go run' to generate app.wasm if target is wasm
+		var cmd *exec.Cmd
+		if s.Target == "wasm" {
+			cmd = exec.Command("tinygo", "build", "-o", "app.wasm", "-target=wasm", ".")
+		} else {
+			cmd = exec.Command("go", "build", "-o", "aethium-app", ".")
+		}
+		cmd.Dir = s.BuildPath
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Initial build failed: %v\n", err)
+		} else {
+			fmt.Println("Initial build complete")
+		}
+	}()
 
-	if err := s.BuildCmd.Start(); err != nil {
-		return fmt.Errorf("failed to start build process: %w", err)
-	}
-
-	// Wait for build to complete
-	if err := s.BuildCmd.Wait(); err != nil {
-		return fmt.Errorf("build process failed: %w", err)
-	}
-
-	// Start HTTP server
-	http.HandleFunc("/", s.serveIndex)
-	http.HandleFunc("/app.wasm", s.serveWasm)
-	http.HandleFunc("/aethium.js", s.serveJS)
+	// Register handlers
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", s.serveIndex)
+	mux.HandleFunc("/app.wasm", s.serveWasm)
+	mux.HandleFunc("/aethium.js", s.serveJS)
 
 	fmt.Printf("Serving Aethium app at http://%s\n", s.Addr)
 	if s.Open {
 		go func() {
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(500 * time.Millisecond)
 			openBrowser("http://" + s.Addr)
 		}()
 	}
 
-	return http.ListenAndServe(s.Addr, nil)
+	server := &http.Server{
+		Addr:    s.Addr,
+		Handler: mux,
+	}
+
+	return server.ListenAndServe()
 }
 
 func (s *Server) Stop() error {
@@ -120,4 +131,3 @@ func openBrowser(url string) {
 	}
 	cmd.Start()
 }
-

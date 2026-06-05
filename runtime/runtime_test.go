@@ -29,7 +29,7 @@ func (c *benchComponent) View() []canvas.DrawCmd {
 }
 
 func TestRuntime_Attach(t *testing.T) {
-	rt := NewRuntime(&noopBackend{})
+	rt := runtime.NewRuntime(&noopBackend{})
 	comp := &benchComponent{count: reactive.NewSignal(0)}
 
 	if err := rt.Attach(comp); err != nil {
@@ -43,12 +43,12 @@ func TestRuntime_Attach(t *testing.T) {
 
 func TestRuntime_Tick(t *testing.T) {
 	backend := &mockBackend{}
-	rt := NewRuntime(backend)
+	rt := runtime.NewRuntime(backend)
 	sig := reactive.NewSignal(0)
 	comp := &benchComponent{count: sig}
 
 	rt.Attach(comp)
-	
+
 	// Initial tick
 	if err := rt.Tick(); err != nil {
 		t.Fatalf("Tick failed: %v", err)

@@ -65,12 +65,18 @@ func main() {
 	case "bundle":
 		bundleCmd := flag.NewFlagSet("bundle", flag.ExitOnError)
 		target := bundleCmd.String("target", "desktop", "Target: desktop or wasm")
-		format := bundleCmd.String("format", "native", "Format: native or wasm")
-		output := bundleCmd.String("output", "dist/bundle", "Output file")
+		output := bundleCmd.String("output", "dist/bundle", "Output directory")
 		bundleCmd.Parse(os.Args[2:])
-		fmt.Printf("Creating bundle for %s target in %s format\n", *target, *format)
-		fmt.Printf("Output: %s\n", *output)
-		fmt.Println("Bundle created (placeholder)")
+		cfg := build.BuildConfig{
+			Target:    *target,
+			OutputDir: *output,
+			Release:   true,
+		}
+		if err := build.Bundle(cfg); err != nil {
+			fmt.Printf("Bundle failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Bundle created successfully")
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)
 		usage()

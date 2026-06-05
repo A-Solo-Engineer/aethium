@@ -35,9 +35,19 @@ func Build(cfg BuildConfig) error {
 func buildWasm(cfg BuildConfig) error {
 	fmt.Println("Building for Wasm (TinyGo)...")
 
+	// Check if tinygo is installed
+	if _, err := exec.LookPath("tinygo"); err != nil {
+		return fmt.Errorf("tinygo not found in PATH: %w. Please install TinyGo to build for WASM", err)
+	}
+
 	// TinyGo build command
-	cmd := exec.Command("tinygo", "build", "-o", filepath.Join(cfg.OutputDir, "app.wasm"), "-target=wasm", "-tags=tinygo", ".")
-	cmd.Dir = cfg.OutputDir
+	outputPath := filepath.Join(cfg.OutputDir, "app.wasm")
+	// Ensure directory exists
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
+		return err
+	}
+
+	cmd := exec.Command("tinygo", "build", "-o", outputPath, "-target=wasm", "-tags=tinygo", ".")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -45,7 +55,7 @@ func buildWasm(cfg BuildConfig) error {
 		return fmt.Errorf("tinygo build failed: %w", err)
 	}
 
-	fmt.Println("Wasm build complete")
+	fmt.Printf("Wasm build complete: %s\n", outputPath)
 	return nil
 }
 
@@ -70,4 +80,41 @@ func buildDesktop(cfg BuildConfig) error {
 
 	fmt.Println("Desktop build complete")
 	return nil
+}
+
+func Bundle(cfg BuildConfig) error {
+	fmt.Printf("Creating bundle for %s target...\n", cfg.Target)
+
+	// Ensure output directory exists
+	if err := os.MkdirAll(cfg.OutputDir, 0755); err != nil {
+		return fmt.Errorf("failed to create output directory: %w", err)
+	}
+
+	// Build first
+	if err := Build(cfg); err != nil {
+		return err
+	}
+
+	// Copy assets based on target
+	if cfg.Target == "wasm" || cfg.Target == "all" {
+		assets := []string{"index.html", "aethium.js"}
+		for _, asset := range assets {
+			src := filepath.Join("platform", "webview", "assets", asset)
+			dst := filepath.Join(cfg.OutputDir, asset)
+			if err := copyFile(src, dst); err != nil {
+				fmt.Printf("Warning: failed to copy asset %s: %v\n", asset, err)
+			}
+		}
+	}
+
+	fmt.Println("Bundle created successfully")
+	return nil
+}
+
+func copyFile(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, 0644)
 }

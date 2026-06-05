@@ -97,20 +97,26 @@ func Transform(dl *DrawList, matrix [6]float32) {
 	dl.Append(DrawCmd{Kind: CmdTransform, Transform: matrix})
 }
 
-// Render executes all draw commands in the list
+// Render executes all draw commands in the list.
+// In a real implementation, this would call into a graphics library.
 func (dl *DrawList) Render() {
 	for _, cmd := range dl.Cmds {
 		switch cmd.Kind {
 		case CmdFillRect:
-			// FillRect implementation would go here
+			// Example: Draw a filled rectangle
+			// graphics.FillRect(cmd.X, cmd.Y, cmd.W, cmd.H, cmd.Color)
 		case CmdStrokeRect:
-			// StrokeRect implementation would go here
+			// Example: Draw a rectangle outline
+			// graphics.StrokeRect(cmd.X, cmd.Y, cmd.W, cmd.H, cmd.Color)
 		case CmdDrawText:
-			// DrawText implementation would go here
+			// Example: Draw text
+			// graphics.DrawText(cmd.Text, cmd.X, cmd.Y, cmd.Color)
 		case CmdClip:
-			// Clip implementation would go here
+			// Example: Set clipping region
+			// graphics.SetClip(cmd.X, cmd.Y, cmd.W, cmd.H)
 		case CmdTransform:
-			// Transform implementation would go here
+			// Example: Apply transformation matrix
+			// graphics.SetTransform(cmd.Transform)
 		}
 	}
 }
