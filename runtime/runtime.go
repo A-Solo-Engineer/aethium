@@ -50,6 +50,9 @@ type Runtime struct {
 	nodeSignals       map[scene.NodeID]map[reactive.SignalID]struct{}
 	signalNodes       map[reactive.SignalID]map[scene.NodeID]*scene.VNode
 	signalUnsubscribe func()
+
+	reactiveCtx *reactive.Context
+	sceneCtx    *scene.Context
 }
 
 func NewRuntime(backend platform.Backend) *Runtime {
@@ -58,13 +61,19 @@ func NewRuntime(backend platform.Backend) *Runtime {
 		uiQueue:     make([]func(), 0, 64),
 		nodeSignals: make(map[scene.NodeID]map[reactive.SignalID]struct{}),
 		signalNodes: make(map[reactive.SignalID]map[scene.NodeID]*scene.VNode),
+		reactiveCtx: reactive.NewContext(),
+		sceneCtx:    scene.NewContext(),
 	}
 	// Note: Dependency tracking is handled per-tick by pushing/popping
 	// the runtime instance onto the reactive tracker stack.
-	scene.SetCurrentTracker(r)
-	_, unsubscribe := reactive.SubscribeAll(r.handleSignalChange)
+	r.sceneCtx.SetCurrentTracker(r)
+	_, unsubscribe := r.reactiveCtx.SubscribeAll(r.handleSignalChange)
 	r.signalUnsubscribe = unsubscribe
 	return r
+}
+
+func (r *Runtime) Reactive() *reactive.Context {
+	return r.reactiveCtx
 }
 
 func (r *Runtime) ScheduleOnUI(fn func()) {
@@ -92,7 +101,7 @@ func (r *Runtime) Attach(root Component) error {
 	if root == nil {
 		return errors.New("root component is nil")
 	}
-	r.root = scene.NewVNode(root)
+	r.root = r.sceneCtx.NewVNode(root)
 
 	if err := root.Init(InitContext{Runtime: r}); err != nil {
 		return err
@@ -116,8 +125,8 @@ func (r *Runtime) Tick() error {
 	}
 
 	// Build frame with tracking enabled
-	reactive.PushDependencyTracker(r)
-	defer reactive.PopDependencyTracker()
+	r.reactiveCtx.PushDependencyTracker(r)
+	defer r.reactiveCtx.PopDependencyTracker()
 
 	dl := canvas.NewDrawList()
 	defer dl.Release()

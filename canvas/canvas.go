@@ -97,26 +97,31 @@ func Transform(dl *DrawList, matrix [6]float32) {
 	dl.Append(DrawCmd{Kind: CmdTransform, Transform: matrix})
 }
 
-// Render executes all draw commands in the list.
-// In a real implementation, this would call into a graphics library.
-func (dl *DrawList) Render() {
+type Graphics interface {
+	FillRect(x, y, w, h float32, color Color)
+	StrokeRect(x, y, w, h float32, color Color)
+	DrawText(x, y float32, text string, color Color)
+	SetClip(x, y, w, h float32)
+	SetTransform(matrix [6]float32)
+}
+
+// Render executes all draw commands in the list using the provided graphics interface.
+func (dl *DrawList) Render(g Graphics) {
+	if dl == nil || g == nil {
+		return
+	}
 	for _, cmd := range dl.Cmds {
 		switch cmd.Kind {
 		case CmdFillRect:
-			// Example: Draw a filled rectangle
-			// graphics.FillRect(cmd.X, cmd.Y, cmd.W, cmd.H, cmd.Color)
+			g.FillRect(cmd.X, cmd.Y, cmd.W, cmd.H, cmd.Color)
 		case CmdStrokeRect:
-			// Example: Draw a rectangle outline
-			// graphics.StrokeRect(cmd.X, cmd.Y, cmd.W, cmd.H, cmd.Color)
+			g.StrokeRect(cmd.X, cmd.Y, cmd.W, cmd.H, cmd.Color)
 		case CmdDrawText:
-			// Example: Draw text
-			// graphics.DrawText(cmd.Text, cmd.X, cmd.Y, cmd.Color)
+			g.DrawText(cmd.X, cmd.Y, cmd.Text, cmd.Color)
 		case CmdClip:
-			// Example: Set clipping region
-			// graphics.SetClip(cmd.X, cmd.Y, cmd.W, cmd.H)
+			g.SetClip(cmd.X, cmd.Y, cmd.W, cmd.H)
 		case CmdTransform:
-			// Example: Apply transformation matrix
-			// graphics.SetTransform(cmd.Transform)
+			g.SetTransform(cmd.Transform)
 		}
 	}
 }

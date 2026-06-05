@@ -35,40 +35,60 @@ type UpdateContext struct {
 	Dirty []reactive.SignalID
 }
 
-var (
+type Context struct {
 	currentTracker DependencyTracker
 	trackerMu      sync.RWMutex
 
 	nodeSeq   NodeID
 	nodeSeqMu sync.Mutex
+}
+
+func NewContext() *Context {
+	return &Context{}
+}
+
+var (
+	defaultContext = NewContext()
 )
 
-func SetCurrentTracker(t DependencyTracker) {
-	trackerMu.Lock()
-	currentTracker = t
-	trackerMu.Unlock()
+func (c *Context) SetCurrentTracker(t DependencyTracker) {
+	c.trackerMu.Lock()
+	c.currentTracker = t
+	c.trackerMu.Unlock()
 }
 
-func CurrentTracker() DependencyTracker {
-	trackerMu.RLock()
-	defer trackerMu.RUnlock()
-	return currentTracker
+func (c *Context) CurrentTracker() DependencyTracker {
+	c.trackerMu.RLock()
+	defer c.trackerMu.RUnlock()
+	return c.currentTracker
 }
 
-func newNodeID() NodeID {
-	nodeSeqMu.Lock()
-	nodeSeq++
-	id := nodeSeq
-	nodeSeqMu.Unlock()
+func (c *Context) newNodeID() NodeID {
+	c.nodeSeqMu.Lock()
+	c.nodeSeq++
+	id := c.nodeSeq
+	c.nodeSeqMu.Unlock()
 	return id
 }
 
-func NewVNode(component any) *VNode {
+func (c *Context) NewVNode(component any) *VNode {
 	n := vnodePool.Get().(*VNode)
 	n.Reset()
-	n.ID = newNodeID()
+	n.ID = c.newNodeID()
 	n.Component = component
 	return n
+}
+
+func SetCurrentTracker(t DependencyTracker) {
+	defaultContext.SetCurrentTracker(t)
+}
+
+func CurrentTracker() DependencyTracker {
+	return defaultContext.CurrentTracker()
+}
+
+func NewVNode(component any) *VNode {
+	return defaultContext.NewVNode(component)
 }
 
 func ReleaseVNode(n *VNode) {
