@@ -95,7 +95,7 @@ func (r *Runtime) Attach(root Component) error {
 	if err := root.Init(InitContext{Runtime: r}); err != nil {
 		return err
 	}
-	if err := root.Mount(MountContext{Runtime: InitContext{Runtime: r}, Node: r.root}); err != nil {
+	if err := root.Mount(MountContext{Index: 0, Node: r.root}); err != nil {
 		return err
 	}
 
@@ -146,7 +146,7 @@ func (r *Runtime) buildFrame(node *scene.VNode, dl *canvas.DrawList, index int) 
 				return err
 			}
 		}
-		node.SetDirty(false)
+		node.Dirty = false
 	}
 
 	// Render this node
@@ -209,7 +209,7 @@ func (r *Runtime) handleSignalChange(id reactive.SignalID) {
 	}
 
 	for _, node := range nodes {
-		node.SetDirty(true)
+		node.MarkDirty()
 	}
 }
 
