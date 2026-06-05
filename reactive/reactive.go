@@ -3,6 +3,7 @@ package reactive
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 )
 
 type SignalID uint64
@@ -30,7 +31,6 @@ type Signal[T comparable] struct {
 
 type Computed[T comparable] struct {
 	id          SignalID
-	deps        func() []SignalID
 	compute     func() T
 	cached      T
 	mu          sync.RWMutex
@@ -43,45 +43,61 @@ type Effect struct {
 	fn     func(ctx EffectContext)
 	mu     sync.RWMutex
 	active bool
+	unsub  func()
 }
 
 var (
-	currentTracker DependencyTracker
-	trackerMu      sync.RWMutex
+	trackerStack   []DependencyTracker
+	trackerStackMu sync.Mutex
 
 	subscriberMu sync.Mutex
-	subSeq       SubscriberID
 	subscribers  = map[SubscriberID]func(){}
 
 	signalSubscriberMu sync.Mutex
 	signalSubscribers  = map[SignalID]map[SubscriberID]func(SignalID){}
+	subscriberSignals  = map[SubscriberID][]SignalID{}
 
-	effectMu  sync.Mutex
-	effectSeq EffectID
-	effects   = map[EffectID]*Effect{}
+	effectMu sync.Mutex
+	effects  = map[EffectID]*Effect{}
 
-	signalSeq   SignalID
-	signalSeqMu sync.Mutex
+	signalSeq atomic.Uint64
+	subSeq    atomic.Uint64
+	effectSeq atomic.Uint64
 )
 
-func SetDependencyTracker(t DependencyTracker) {
-	trackerMu.Lock()
-	currentTracker = t
-	trackerMu.Unlock()
+func newSignalID() SignalID {
+	return SignalID(signalSeq.Add(1))
+}
+
+func newSubscriberID() SubscriberID {
+	return SubscriberID(subSeq.Add(1))
+}
+
+func newEffectID() EffectID {
+	return EffectID(effectSeq.Add(1))
+}
+
+func PushDependencyTracker(t DependencyTracker) {
+	trackerStackMu.Lock()
+	trackerStack = append(trackerStack, t)
+	trackerStackMu.Unlock()
+}
+
+func PopDependencyTracker() {
+	trackerStackMu.Lock()
+	if len(trackerStack) > 0 {
+		trackerStack = trackerStack[:len(trackerStack)-1]
+	}
+	trackerStackMu.Unlock()
 }
 
 func CurrentTracker() DependencyTracker {
-	trackerMu.RLock()
-	defer trackerMu.RUnlock()
-	return currentTracker
-}
-
-func newSignalID() SignalID {
-	signalSeqMu.Lock()
-	signalSeq++
-	id := signalSeq
-	signalSeqMu.Unlock()
-	return id
+	trackerStackMu.Lock()
+	defer trackerStackMu.Unlock()
+	if len(trackerStack) == 0 {
+		return nil
+	}
+	return trackerStack[len(trackerStack)-1]
 }
 
 func NewSignal[T comparable](initial T) *Signal[T] {
@@ -125,9 +141,8 @@ func (s *Signal[T]) Peek() T {
 }
 
 func Subscribe(cb func()) (SubscriberID, func()) {
+	id := newSubscriberID()
 	subscriberMu.Lock()
-	subSeq++
-	id := subSeq
 	subscribers[id] = cb
 	subscriberMu.Unlock()
 
@@ -137,9 +152,8 @@ func Subscribe(cb func()) (SubscriberID, func()) {
 }
 
 func SubscribeAll(cb func(SignalID)) (SubscriberID, func()) {
+	id := newSubscriberID()
 	signalSubscriberMu.Lock()
-	subSeq++
-	id := subSeq
 	if signalSubscribers == nil {
 		signalSubscribers = map[SignalID]map[SubscriberID]func(SignalID){}
 	}
@@ -147,6 +161,11 @@ func SubscribeAll(cb func(SignalID)) (SubscriberID, func()) {
 		signalSubscribers[0] = map[SubscriberID]func(SignalID){}
 	}
 	signalSubscribers[0][id] = cb
+
+	if subscriberSignals == nil {
+		subscriberSignals = map[SubscriberID][]SignalID{}
+	}
+	subscriberSignals[id] = append(subscriberSignals[id], 0)
 	signalSubscriberMu.Unlock()
 
 	return id, func() {
@@ -166,18 +185,25 @@ func UnsubscribeAll(id SubscriberID) {
 	signalSubscriberMu.Lock()
 	defer signalSubscriberMu.Unlock()
 
-	for signalID, listeners := range signalSubscribers {
-		delete(listeners, id)
-		if len(listeners) == 0 {
-			delete(signalSubscribers, signalID)
+	signals, ok := subscriberSignals[id]
+	if !ok {
+		return
+	}
+
+	for _, sid := range signals {
+		if listeners, ok := signalSubscribers[sid]; ok {
+			delete(listeners, id)
+			if len(listeners) == 0 {
+				delete(signalSubscribers, sid)
+			}
 		}
 	}
+	delete(subscriberSignals, id)
 }
 
 func SubscribeSignal(sid SignalID, cb func(SignalID)) (SubscriberID, func()) {
+	id := newSubscriberID()
 	signalSubscriberMu.Lock()
-	subSeq++
-	id := subSeq
 	if signalSubscribers == nil {
 		signalSubscribers = map[SignalID]map[SubscriberID]func(SignalID){}
 	}
@@ -185,6 +211,11 @@ func SubscribeSignal(sid SignalID, cb func(SignalID)) (SubscriberID, func()) {
 		signalSubscribers[sid] = map[SubscriberID]func(SignalID){}
 	}
 	signalSubscribers[sid][id] = cb
+
+	if subscriberSignals == nil {
+		subscriberSignals = map[SubscriberID][]SignalID{}
+	}
+	subscriberSignals[id] = append(subscriberSignals[id], sid)
 	signalSubscriberMu.Unlock()
 
 	return id, func() {
@@ -227,35 +258,64 @@ func Notify(id SignalID) {
 // notifyLocked removed: it read subscribers without holding the lock
 // and was unused. Effects should be scheduled via an EffectRuntime.
 
-func NewComputed[T comparable](deps func() []SignalID, compute func() T) *Computed[T] {
+type recordingTracker struct {
+	mu   sync.Mutex
+	deps map[SignalID]struct{}
+}
+
+func (r *recordingTracker) Track(id SignalID) {
+	r.mu.Lock()
+	if r.deps == nil {
+		r.deps = make(map[SignalID]struct{})
+	}
+	r.deps[id] = struct{}{}
+	r.mu.Unlock()
+}
+
+func NewComputed[T comparable](compute func() T) *Computed[T] {
 	c := &Computed[T]{
 		id:      newSignalID(),
-		deps:    deps,
 		compute: compute,
-		cached:  compute(),
-		dirty:   false,
+		dirty:   true,
 	}
 
-	// Subscribe to each dependency individually for better efficiency.
-	unsubscribes := make([]func(), 0)
-	for _, d := range c.deps() {
+	c.update()
+	return c
+}
+
+func (c *Computed[T]) update() {
+	tracker := &recordingTracker{}
+
+	PushDependencyTracker(tracker)
+	newVal := c.compute()
+	PopDependencyTracker()
+
+	c.mu.Lock()
+	c.cached = newVal
+	c.dirty = false
+	if c.unsubscribe != nil {
+		c.unsubscribe()
+	}
+
+	unsubscribes := make([]func(), 0, len(tracker.deps))
+	for d := range tracker.deps {
 		_, unsub := SubscribeSignal(d, func(sid SignalID) {
 			c.Invalidate()
 			Notify(c.id)
 		})
 		unsubscribes = append(unsubscribes, unsub)
 	}
-
 	c.unsubscribe = func() {
 		for _, unsub := range unsubscribes {
 			unsub()
 		}
 	}
-
-	return c
+	c.mu.Unlock()
 }
 
 func (c *Computed[T]) Dispose() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.unsubscribe != nil {
 		c.unsubscribe()
 	}
@@ -265,13 +325,12 @@ func (c *Computed[T]) Get() T {
 	if tracker := CurrentTracker(); tracker != nil {
 		tracker.Track(c.id)
 	}
+
 	c.mu.Lock()
 	if c.dirty {
-		newVal := c.compute()
-		if newVal != c.cached {
-			c.cached = newVal
-		}
-		c.dirty = false
+		c.mu.Unlock()
+		c.update()
+		c.mu.Lock()
 	}
 	value := c.cached
 	c.mu.Unlock()
@@ -292,9 +351,8 @@ func (c *Computed[T]) Invalidate() {
 // execution is routed through ScheduleOnUI and avoid data races.
 
 func NewEffectWithRuntime(rt EffectRuntime, fn func(ctx EffectContext)) EffectID {
+	id := newEffectID()
 	effectMu.Lock()
-	effectSeq++
-	id := effectSeq
 	effect := &Effect{
 		id:     id,
 		fn:     fn,
@@ -303,18 +361,44 @@ func NewEffectWithRuntime(rt EffectRuntime, fn func(ctx EffectContext)) EffectID
 	effects[id] = effect
 	effectMu.Unlock()
 
-	// Route effect execution through the runtime's UI scheduler to avoid
-	// data races with Computed.Get() and CurrentTracker access.
-	rt.ScheduleOnUI(func() {
-		effectMu.Lock()
-		e, ok := effects[id]
-		effectMu.Unlock()
-		if !ok || !e.IsActive() {
-			return
-		}
-		e.fn(EffectContext{Ctx: context.Background(), Runtime: rt})
-	})
+	var run func()
+	run = func() {
+		rt.ScheduleOnUI(func() {
+			effectMu.Lock()
+			e, ok := effects[id]
+			effectMu.Unlock()
+			if !ok || !e.IsActive() {
+				return
+			}
 
+			tracker := &recordingTracker{}
+			PushDependencyTracker(tracker)
+
+			e.fn(EffectContext{Ctx: context.Background(), Runtime: rt})
+
+			PopDependencyTracker()
+
+			e.mu.Lock()
+			if e.unsub != nil {
+				e.unsub()
+			}
+			unsubscribes := make([]func(), 0, len(tracker.deps))
+			for d := range tracker.deps {
+				_, unsub := SubscribeSignal(d, func(sid SignalID) {
+					run()
+				})
+				unsubscribes = append(unsubscribes, unsub)
+			}
+			e.unsub = func() {
+				for _, unsub := range unsubscribes {
+					unsub()
+				}
+			}
+			e.mu.Unlock()
+		})
+	}
+
+	run()
 	return id
 }
 
@@ -323,6 +407,9 @@ func DisposeEffect(id EffectID) {
 	if effect, ok := effects[id]; ok {
 		effect.mu.Lock()
 		effect.active = false
+		if effect.unsub != nil {
+			effect.unsub()
+		}
 		effect.mu.Unlock()
 		delete(effects, id)
 	}

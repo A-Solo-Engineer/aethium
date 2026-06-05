@@ -40,7 +40,8 @@ type UnmountContext struct {
 
 type Runtime struct {
 	backend           platform.Backend
-	uiQueue           chan func()
+	uiQueueMu         sync.Mutex
+	uiQueue           []func()
 	root              *scene.VNode
 	frameMu           sync.Mutex
 	frame             int
@@ -54,11 +55,12 @@ type Runtime struct {
 func NewRuntime(backend platform.Backend) *Runtime {
 	r := &Runtime{
 		backend:     backend,
-		uiQueue:     make(chan func(), 64),
+		uiQueue:     make([]func(), 0, 64),
 		nodeSignals: make(map[scene.NodeID]map[reactive.SignalID]struct{}),
 		signalNodes: make(map[reactive.SignalID]map[scene.NodeID]*scene.VNode),
 	}
-	reactive.SetDependencyTracker(r)
+	// Note: Dependency tracking is handled per-tick by pushing/popping
+	// the runtime instance onto the reactive tracker stack.
 	scene.SetCurrentTracker(r)
 	_, unsubscribe := reactive.SubscribeAll(r.handleSignalChange)
 	r.signalUnsubscribe = unsubscribe
@@ -66,23 +68,23 @@ func NewRuntime(backend platform.Backend) *Runtime {
 }
 
 func (r *Runtime) ScheduleOnUI(fn func()) {
-	select {
-	case r.uiQueue <- fn:
-	default:
-		go func() {
-			r.uiQueue <- fn
-		}()
-	}
+	r.uiQueueMu.Lock()
+	r.uiQueue = append(r.uiQueue, fn)
+	r.uiQueueMu.Unlock()
 }
 
 func (r *Runtime) drainUIQueue() {
-	for {
-		select {
-		case fn := <-r.uiQueue:
-			fn()
-		default:
-			return
-		}
+	r.uiQueueMu.Lock()
+	if len(r.uiQueue) == 0 {
+		r.uiQueueMu.Unlock()
+		return
+	}
+	work := r.uiQueue
+	r.uiQueue = make([]func(), 0, len(work))
+	r.uiQueueMu.Unlock()
+
+	for _, fn := range work {
+		fn()
 	}
 }
 
@@ -113,7 +115,10 @@ func (r *Runtime) Tick() error {
 		return nil
 	}
 
-	// Build frame
+	// Build frame with tracking enabled
+	reactive.PushDependencyTracker(r)
+	defer reactive.PopDependencyTracker()
+
 	dl := canvas.NewDrawList()
 	defer dl.Release()
 
@@ -134,11 +139,16 @@ func (r *Runtime) buildFrame(node *scene.VNode, dl *canvas.DrawList, index int) 
 		return nil
 	}
 	r.depMu.Lock()
+	prevNode := r.currentNode
 	r.currentNode = node
 	r.clearNodeDependencies(node)
-	// depMu must be unlocked before calling component methods;
-	// View() calls signal.Get() which calls Track() which acquires depMu.
 	r.depMu.Unlock()
+
+	defer func() {
+		r.depMu.Lock()
+		r.currentNode = prevNode
+		r.depMu.Unlock()
+	}()
 
 	// Call component Update if dirty
 	if node.IsDirty() {
@@ -174,7 +184,7 @@ func (r *Runtime) buildFrame(node *scene.VNode, dl *canvas.DrawList, index int) 
 	}
 
 	r.depMu.Lock()
-	r.currentNode = nil
+	// No need to set r.currentNode = nil here, defer handles it
 	r.depMu.Unlock()
 
 	return nil

@@ -57,7 +57,6 @@ func TestComputed_Efficiency(t *testing.T) {
 
 	computeCount := 0
 	computed := reactive.NewComputed(
-		func() []reactive.SignalID { return []reactive.SignalID{sig1.ID()} },
 		func() int {
 			computeCount++
 			return sig1.Get()
@@ -70,10 +69,8 @@ func TestComputed_Efficiency(t *testing.T) {
 
 	// Set sig2 (which computed does NOT depend on)
 	sig2.Set(3)
-	
+
 	// Check if computed was notified (it shouldn't be)
-	// We can check this by seeing if Notify was called on computed.id
-	// or more simply, check if computed is still clean.
 	_ = computed.Get()
 	if computeCount != initialCount {
 		t.Errorf("expected computed NOT to recompute when unrelated signal changes, but computeCount went from %d to %d", initialCount, computeCount)

@@ -80,10 +80,24 @@ func ReleaseVNode(n *VNode) {
 }
 
 func (n *VNode) Reset() {
-	n.Children = n.Children[:0]
-	n.Signals = n.Signals[:0]
+	// Clear slices but keep capacity for small sizes to avoid reallocations.
+	// For large slices, we nil them out to let GC reclaim memory.
+	if cap(n.Children) > 32 {
+		n.Children = nil
+	} else {
+		n.Children = n.Children[:0]
+	}
+	if cap(n.Signals) > 64 {
+		n.Signals = nil
+	} else {
+		n.Signals = n.Signals[:0]
+	}
+	if cap(n.DirtySignals) > 64 {
+		n.DirtySignals = nil
+	} else {
+		n.DirtySignals = n.DirtySignals[:0]
+	}
 	n.Dirty = false
-	n.DirtySignals = n.DirtySignals[:0]
 	n.Parent = nil
 }
 

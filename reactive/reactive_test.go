@@ -31,7 +31,8 @@ func BenchmarkSignalGetTracked(b *testing.B) {
 	b.ReportAllocs()
 	sig := reactive.NewSignal(0)
 	tracker := &mockTracker{}
-	reactive.SetDependencyTracker(tracker)
+	reactive.PushDependencyTracker(tracker)
+	defer reactive.PopDependencyTracker()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -42,7 +43,6 @@ func BenchmarkSignalGetTracked(b *testing.B) {
 func BenchmarkComputedGet(b *testing.B) {
 	b.ReportAllocs()
 	computed := reactive.NewComputed(
-		func() []reactive.SignalID { return []reactive.SignalID{} },
 		func() int { return 0 },
 	)
 
@@ -55,7 +55,6 @@ func BenchmarkComputedGet(b *testing.B) {
 func BenchmarkComputedGetStale(b *testing.B) {
 	b.ReportAllocs()
 	computed := reactive.NewComputed(
-		func() []reactive.SignalID { return []reactive.SignalID{} },
 		func() int { return 0 },
 	)
 
