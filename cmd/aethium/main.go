@@ -1,10 +1,8 @@
 package main
 
 import (
-	"embed"
 	"flag"
 	"fmt"
-	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -80,18 +78,18 @@ func main() {
 
 func scaffoldNewApp(module, template, dir string) error {
 	fmt.Printf("Scaffolding new app: module=%s template=%s dir=%s\n", module, template, dir)
-	
+
 	// Create basic directory structure
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
-	
+
 	// Create go.mod
 	goModContent := fmt.Sprintf("module %s\n\ngo 1.22\n\nrequire github.com/A-Solo-Engineer/aethium v0.0.1\n", module)
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(goModContent), 0644); err != nil {
 		return fmt.Errorf("failed to create go.mod: %w", err)
 	}
-	
+
 	// Create main.go
 	mainContent := fmt.Sprintf(`package main
 
@@ -113,13 +111,13 @@ func main() {
 	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(mainContent), 0644); err != nil {
 		return fmt.Errorf("failed to create main.go: %w", err)
 	}
-	
+
 	// Copy example app
 	exampleDir := filepath.Join(dir, "app")
 	if err := os.MkdirAll(exampleDir, 0755); err != nil {
 		return fmt.Errorf("failed to create app directory: %w", err)
 	}
-	
+
 	// Copy counter.go
 	counterContent := `package app
 
@@ -218,18 +216,18 @@ func RunDev() {
 	if err := os.WriteFile(filepath.Join(exampleDir, "counter.go"), []byte(counterContent), 0644); err != nil {
 		return fmt.Errorf("failed to create counter.go: %w", err)
 	}
-	
+
 	return nil
 }
 
 func buildApp(target string, release bool, output, tags string) error {
 	fmt.Printf("Building for %s target...\n", target)
-	
+
 	// Create output directory
 	if err := os.MkdirAll(output, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
-	
+
 	switch target {
 	case "wasm":
 		cmd := exec.Command("tinygo", "build", "-o", filepath.Join(output, "app.wasm"), "-target=wasi", "-tags=tinygo", ".")
@@ -257,13 +255,13 @@ func buildApp(target string, release bool, output, tags string) error {
 	default:
 		return fmt.Errorf("unknown target: %s", target)
 	}
-	
+
 	return nil
 }
 
 func startDevServer(target, addr string, open bool) error {
 	fmt.Printf("Starting dev server for %s target at %s\n", target, addr)
-	
+
 	// Start dev server
 	// For now, just serve the current directory
 	server := &http.Server{
@@ -273,7 +271,7 @@ func startDevServer(target, addr string, open bool) error {
 			http.ServeFile(w, r, r.URL.Path[1:])
 		}),
 	}
-	
+
 	if open {
 		// Open browser
 		url := "http://" + addr
@@ -282,20 +280,20 @@ func startDevServer(target, addr string, open bool) error {
 			fmt.Printf("Failed to open browser: %v\n", err)
 		}
 	}
-	
+
 	fmt.Printf("Dev server running at http://%s\n", addr)
 	return server.ListenAndServe()
 }
 
 func createBundle(target, format, output string) error {
 	fmt.Printf("Creating bundle for %s target in %s format\n", target, format)
-	
+
 	// Create bundle directory
 	bundleDir := filepath.Dir(output)
 	if err := os.MkdirAll(bundleDir, 0755); err != nil {
 		return fmt.Errorf("failed to create bundle directory: %w", err)
 	}
-	
+
 	// For now, just copy the built app
 	switch target {
 	case "desktop":
@@ -311,7 +309,7 @@ func createBundle(target, format, output string) error {
 	default:
 		return fmt.Errorf("unknown target: %s", target)
 	}
-	
+
 	return nil
 }
 
@@ -334,4 +332,3 @@ func usage() {
 	fmt.Println()
 	fmt.Println("Run 'aethium <command> -h' for command-specific help")
 }
-

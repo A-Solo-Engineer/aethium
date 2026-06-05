@@ -8,7 +8,7 @@ import (
 
 // Mock backend for testing
 type MockBackend struct {
-	RenderCount int
+	RenderCount  int
 	LastDrawList *canvas.DrawList
 }
 

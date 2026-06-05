@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/A-Solo-Engineer/aethium/canvas"
-	"github.com/A-Solo-Engineer/aethium/platform"
 )
 
 type DesktopBackend struct {
