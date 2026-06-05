@@ -3,7 +3,7 @@
 package js
 
 import (
-	"syscall/js"
+	"fmt"
 
 	"github.com/A-Solo-Engineer/aethium/canvas"
 	"github.com/A-Solo-Engineer/aethium/platform"
@@ -18,6 +18,11 @@ func NewBackend(canvasID string) *Backend {
 }
 
 func (b *Backend) Render(dl *canvas.DrawList) error {
+	// In a real implementation, this would render to the HTML5 canvas
+	// For now, just log the draw commands
+	fmt.Printf("JS Backend: Rendering %d draw commands to canvas %s\n", len(dl.Cmds), b.canvasID)
+	return nil
+}
 	// Browser rendering is implemented in the JS host bridge.
 	// This is a placeholder for the Go-to-JS bridge.
 	return nil
