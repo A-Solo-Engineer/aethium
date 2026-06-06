@@ -1,6 +1,15 @@
 # Aethium
 
-A minimal, high-performance UI framework for Go with immediate-mode rendering, supporting both browser (Wasm) and desktop targets.
+A minimal, high-performance UI framework where the **UI is written entirely in Go**, rendered via an **immediate-mode canvas**, and deployed to both browser (Wasm) and native desktop targets.
+
+---
+
+## Project Status: Stage 2 (Live & Working)
+
+Aethium is currently in **Stage 2 of development**. This is not just a specification; the repository contains a fully functional core runtime and reactive system.
+
+- **Working Examples**: Check out [examples/hello](examples/hello) and [examples/todo](examples/todo) to see the framework in action.
+- **Current Focus**: Optimization, bug fixes, and expanding the canvas primitive set.
 
 ---
 
@@ -12,6 +21,22 @@ A minimal, high-performance UI framework for Go with immediate-mode rendering, s
 | **Binary Size** | ≤ 500 KB (gzipped) | ≤ 5 MB |
 | **Rendering** | WebGL2 Canvas | System WebView (WebView2/WebKit) |
 | **Threading** | Single-threaded | Main thread (UI) + Background Workers |
+
+---
+
+## Why Aethium? (The Go-First Model)
+
+Aethium's key differentiator is its **unified Go programming model**. Unlike other frameworks that force a split between "frontend" (JS/TS) and "backend" (Go/Rust), Aethium lets you build the entire application, including the UI, in pure Go.
+
+### Comparison Table
+
+| Feature | Aethium | Wails | Tauri | Electron |
+|---------|---------|-------|-------|----------|
+| **UI Language** | **Go** | JS / TS / CSS | JS / TS / CSS | JS / TS / CSS |
+| **Backend Language**| **Go** | Go | Rust | JS / TS (Node) |
+| **Rendering Model** | Immediate Canvas | Web DOM | Web DOM | Web DOM |
+| **Binary Size** | **Ultra Small** (≤ 5MB) | Small (~10-20MB) | Small (~10-20MB) | Large (120MB+) |
+| **JS Engine** | **None** | Required | Required | Required |
 
 ---
 
