@@ -26,7 +26,8 @@ func main() {
 	}
 
 	fmt.Println("Starting render loop...")
-	
+	fmt.Println("Press Ctrl+C to stop.")
+
 	// Simulate some interaction for testing
 	go func() {
 		time.Sleep(2 * time.Second)
@@ -34,7 +35,7 @@ func main() {
 		todoApp.AddTodo("Verification complete")
 	}()
 
-	for i := 0; i < 300; i++ { // Run for ~5 seconds
+	for {
 		if err := rt.Tick(); err != nil {
 			fmt.Printf("Error: %v\n", err)
 			break
