@@ -151,7 +151,7 @@ Deploy to any static host; no server required for default apps.
 
 **TinyGo:** Core packages must compile under TinyGo 0.34.0; CI runs `tinygo build` on every core PR.
 
-**Known deviation:** `build/build.go` currently passes `-tags=tinygo,js` to the TinyGo CLI while `platform/js/js_stub.go` uses `//go:build tinygo`. This mismatch is tracked in `docs/exceptions/tinygo-tag-mismatch.md` and will be corrected in a follow-up patch.
+**Instance-Based Architecture:** The core framework now supports multi-instance deployment. This ensures that memory pooling and reactive state are properly isolated, preventing cross-app state leaks in complex multi-window scenarios.
 
 ---
 
