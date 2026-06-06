@@ -28,29 +28,53 @@
                 const kind = cmd[0];
                 switch (kind) {
                     case 1: // CmdFillRect
-                        ctx.fillStyle = this.parseColor(cmd[5]);
-                        ctx.fillRect(cmd[1], cmd[2], cmd[3], cmd[4]);
+                        this.fillRect(cmd[1], cmd[2], cmd[3], cmd[4], cmd[5]);
                         break;
                     case 2: // CmdStrokeRect
-                        ctx.strokeStyle = this.parseColor(cmd[5]);
-                        ctx.strokeRect(cmd[1], cmd[2], cmd[3], cmd[4]);
+                        this.strokeRect(cmd[1], cmd[2], cmd[3], cmd[4], cmd[5]);
                         break;
                     case 3: // CmdDrawText
-                        ctx.fillStyle = this.parseColor(cmd[5]);
-                        ctx.font = '16px sans-serif';
-                        ctx.fillText(cmd[6], cmd[1], cmd[2]);
+                        this.drawText(cmd[1], cmd[2], cmd[6], cmd[5]);
                         break;
                     case 4: // CmdClip
-                        ctx.beginPath();
-                        ctx.rect(cmd[1], cmd[2], cmd[3], cmd[4]);
-                        ctx.clip();
+                        this.setClip(cmd[1], cmd[2], cmd[3], cmd[4]);
                         break;
                     case 5: // CmdTransform
-                        const m = cmd[7];
-                        ctx.setTransform(m[0], m[1], m[2], m[3], m[4], m[5]);
+                        this.setTransform(cmd[7]);
                         break;
                 }
             }
+        },
+
+        fillRect: function(x, y, w, h, color) {
+            if (!ctx) return;
+            ctx.fillStyle = this.parseColor(color);
+            ctx.fillRect(x, y, w, h);
+        },
+
+        strokeRect: function(x, y, w, h, color) {
+            if (!ctx) return;
+            ctx.strokeStyle = this.parseColor(color);
+            ctx.strokeRect(x, y, w, h);
+        },
+
+        drawText: function(x, y, text, color) {
+            if (!ctx) return;
+            ctx.fillStyle = this.parseColor(color);
+            ctx.font = '16px sans-serif';
+            ctx.fillText(text, x, y);
+        },
+
+        setClip: function(x, y, w, h) {
+            if (!ctx) return;
+            ctx.beginPath();
+            ctx.rect(x, y, w, h);
+            ctx.clip();
+        },
+
+        setTransform: function(m) {
+            if (!ctx) return;
+            ctx.setTransform(m[0], m[1], m[2], m[3], m[4], m[5]);
         },
 
         parseColor: function(color) {

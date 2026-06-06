@@ -23,14 +23,15 @@ type EffectContext struct {
 	Runtime EffectRuntime
 }
 
-type Signal[T comparable] struct {
-	ctx   *Context
-	mu    sync.RWMutex
-	id    SignalID
-	value T
+type Signal[T any] struct {
+	ctx    *Context
+	mu     sync.RWMutex
+	id     SignalID
+	value  T
+	equals func(T, T) bool
 }
 
-type Computed[T comparable] struct {
+type Computed[T any] struct {
 	ctx         *Context
 	id          SignalID
 	compute     func() T
@@ -116,12 +117,24 @@ func (c *Context) newEffectID() EffectID {
 	return EffectID(c.effectSeq.Add(1))
 }
 
-func NewSignal[T comparable](initial T) *Signal[T] {
+func NewSignal[T any](initial T) *Signal[T] {
 	return NewSignalWithContext(defaultContext, initial)
 }
 
-func NewSignalWithContext[T comparable](c *Context, initial T) *Signal[T] {
+func NewSignalWithContext[T any](c *Context, initial T) *Signal[T] {
 	return &Signal[T]{ctx: c, id: c.newSignalID(), value: initial}
+}
+
+func (s *Signal[T]) WithEquality(equals func(T, T) bool) *Signal[T] {
+	s.mu.Lock()
+	s.equals = equals
+	s.mu.Unlock()
+	return s
+}
+
+// EqualsComparable is a helper for comparable types to be used with WithEquality.
+func EqualsComparable[T comparable](a, b T) bool {
+	return a == b
 }
 
 func PushDependencyTracker(t DependencyTracker) {
@@ -154,7 +167,10 @@ func (s *Signal[T]) Get() T {
 
 func (s *Signal[T]) Set(v T) {
 	s.mu.Lock()
-	changed := s.value != v
+	changed := true
+	if s.equals != nil {
+		changed = !s.equals(s.value, v)
+	}
 	if changed {
 		s.value = v
 	}
@@ -328,11 +344,11 @@ func (r *recordingTracker) Track(id SignalID) {
 	r.mu.Unlock()
 }
 
-func NewComputed[T comparable](compute func() T) *Computed[T] {
+func NewComputed[T any](compute func() T) *Computed[T] {
 	return NewComputedWithContext(defaultContext, compute)
 }
 
-func NewComputedWithContext[T comparable](c *Context, compute func() T) *Computed[T] {
+func NewComputedWithContext[T any](c *Context, compute func() T) *Computed[T] {
 	comp := &Computed[T]{
 		ctx:     c,
 		id:      c.newSignalID(),

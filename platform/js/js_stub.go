@@ -1,4 +1,4 @@
-//go:build tinygo
+//go:build tinygo || js
 
 package js
 
@@ -8,15 +8,15 @@ import (
 	"github.com/A-Solo-Engineer/aethium/canvas"
 )
 
-type Backend struct {
+type WebBackend struct {
 	canvasID string
 }
 
-func NewBackend(canvasID string) *Backend {
-	return &Backend{canvasID: canvasID}
+func NewWebBackend(canvasID string) *WebBackend {
+	return &WebBackend{canvasID: canvasID}
 }
 
-func (b *Backend) Render(dl *canvas.DrawList) error {
+func (b *WebBackend) Render(dl *canvas.DrawList) error {
 	if dl == nil {
 		return nil
 	}
@@ -47,35 +47,27 @@ func (b *Backend) Render(dl *canvas.DrawList) error {
 	return nil
 }
 
-var globalBackend *Backend
-
-func RegisterBackend(backend *Backend) {
-	globalBackend = backend
+// Implement canvas.Graphics for the WebBackend if we ever want to call it directly
+func (b *WebBackend) FillRect(x, y, w, h float32, color canvas.Color) {
+	js.Global().Get("Aethium").Call("fillRect", x, y, w, h, uint32(color))
 }
 
-// Exported functions for JS host bridge
-func InitRuntime(canvasID string) {
-	backend := NewBackend(canvasID)
-	RegisterBackend(backend)
-	js.Global().Get("Aethium").Call("initRuntime", canvasID)
+func (b *WebBackend) StrokeRect(x, y, w, h float32, color canvas.Color) {
+	js.Global().Get("Aethium").Call("strokeRect", x, y, w, h, uint32(color))
 }
 
-func RenderFrame(dl *canvas.DrawList) {
-	if globalBackend != nil {
-		globalBackend.Render(dl)
+func (b *WebBackend) DrawText(x, y float32, text string, color canvas.Color) {
+	js.Global().Get("Aethium").Call("drawText", x, y, text, uint32(color))
+}
+
+func (b *WebBackend) SetClip(x, y, w, h float32) {
+	js.Global().Get("Aethium").Call("setClip", x, y, w, h)
+}
+
+func (b *WebBackend) SetTransform(matrix [6]float32) {
+	m := make([]any, 6)
+	for i, v := range matrix {
+		m[i] = v
 	}
-}
-
-func ScheduleOnUI(fn func()) {
-	// Schedule a function to run on the UI thread
-	// Implemented via queueMicrotask and requestAnimationFrame
-	js.Global().Get("queueMicrotask").Invoke(js.FuncOf(func(this js.Value, args []js.Value) any {
-		fn()
-		return nil
-	}))
-}
-
-func PumpEvents() {
-	// Called by the JS event loop to drain the UI queue
-	// This is a placeholder; actual implementation in JS host bridge
+	js.Global().Get("Aethium").Call("setTransform", m)
 }
