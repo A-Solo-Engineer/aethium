@@ -4,15 +4,6 @@ A minimal, high-performance UI framework where the **UI is written entirely in G
 
 ---
 
-## Project Status: Stage 2 (Live & Working)
-
-Aethium is currently in **Stage 2 of development**. This is not just a specification; the repository contains a fully functional core runtime and reactive system.
-
-- **Working Examples**: Check out [examples/hello](examples/hello) and [examples/todo](examples/todo) to see the framework in action.
-- **Current Focus**: Optimization, bug fixes, and expanding the canvas primitive set.
-
----
-
 ## Framework Overview
 
 | Feature | Browser (Wasm) | Desktop (Native) |
